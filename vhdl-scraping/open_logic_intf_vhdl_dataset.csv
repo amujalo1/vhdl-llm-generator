@@ -1,0 +1,1612 @@
+"input","output"
+"This entity measures the frequency of a clock under the assumption that the frequency of the main-clock is exactly correct. Generally the system clock comes from PS, the block is useful to verify if other clocks are set to the correct frequency. This block contains _Open Logic_ clock crossings, refer to [clock crossing principles](../base/clock_crossing_principles.md) regarding timing constraints.","
+
+library ieee;
+    use ieee.std_logic_1164.all;
+    use ieee.numeric_std.all;
+
+library work;
+    use work.olo_base_pkg_math.all;
+
+entity olo_intf_clk_meas is
+    generic (
+        ClkFrequency_g          : real;
+        MaxClkTestFrequency_g   : real := 1.0e9
+    );
+    port (
+        Clk           : in    std_logic;
+        Rst           : in    std_logic;
+        ClkTest       : in    std_logic;
+        Freq_Hz       : out   std_logic_vector(31 downto 0);
+        Freq_Valid    : out   std_logic
+    );
+end entity;
+
+architecture rtl of olo_intf_clk_meas is
+
+    constant MaxClkTestFrequencyInt_c : integer := integer(MaxClkTestFrequency_g);
+    constant ResultWidth_c            : integer := log2ceil(integer(MaxClkTestFrequencyInt_c)+1);
+
+    signal AwaitResult_M : std_logic;
+    signal SecPulse_M    : std_logic;
+    signal ResultValid_M : std_logic;
+    signal Result_M      : std_logic_vector(ResultWidth_c-1 downto 0);
+
+    signal CntrTest_T    : integer range 0 to MaxClkTestFrequencyInt_c;
+    signal Rst_T         : std_logic;
+    signal SecPulse_T    : std_logic;
+    signal Result_T      : std_logic_vector(ResultWidth_c-1 downto 0);
+    signal ResultValid_T : std_logic;
+
+begin
+
+    assert ClkFrequency_g >= 100.0
+        report ""olo_intfclk_meas: ClkFrequency_g must >= 100 Hz""
+        severity failure;
+    assert MaxClkTestFrequency_g >= 100.0
+        report ""olo_intfclk_meas: MaxClkTestFrequency_g must be >= 100 Hz""
+        severity failure;
+
+    p_control : process (Clk) is
+    begin
+        if rising_edge(Clk) then
+
+            Freq_Valid <= '0';
+
+            if SecPulse_M = '1' then
+                AwaitResult_M <= '1';
+                if AwaitResult_M = '1' then
+                    Freq_Hz    <= (others => '0');
+                    Freq_Valid <= '1';
+                end if;
+            end if;
+
+            if ResultValid_M = '1' then
+                Freq_Hz       <= std_logic_vector(resize(unsigned(Result_M), Freq_Hz'length));
+                AwaitResult_M <= '0';
+                Freq_Valid    <= '1';
+            end if;
+
+            if Rst = '1' then
+                AwaitResult_M <= '0';
+                Freq_Hz       <= (others => '0');
+                Freq_Valid    <= '0';
+            end if;
+
+        end if;
+    end process;
+
+    p_meas : process (ClkTest) is
+    begin
+        if rising_edge(ClkTest) then
+
+            ResultValid_T <= '0';
+
+            if SecPulse_T = '1' then
+                Result_T      <= toUslv(CntrTest_T, ResultWidth_c);
+                CntrTest_T    <= 1;          -- the first edge implicitly arrived
+                ResultValid_T <= '1';
+            elsif CntrTest_T /= MaxClkTestFrequencyInt_c then
+                CntrTest_T <= CntrTest_T + 1;
+            end if;
+
+            if Rst_T = '1' then
+                CntrTest_T    <= 0;
+                ResultValid_T <= '0';
+            end if;
+        end if;
+    end process;
+
+    i_sec_pulse : entity work.olo_base_strobe_gen
+        generic map (
+            FreqClkHz_g    => ClkFrequency_g,
+            FreqStrobeHz_g => 1.0
+        )
+        port map (
+            Clk         => Clk,
+            Rst         => Rst,
+            Out_Valid   => SecPulse_M
+        );
+
+    i_sec_pulse_cc : entity work.olo_base_cc_pulse
+        port map (
+            In_Clk        => Clk,
+            In_RstIn      => Rst,
+            In_Pulse(0)   => SecPulse_M,
+            Out_Clk       => ClkTest,
+            Out_RstOut    => Rst_T,
+            Out_Pulse(0)  => SecPulse_T
+        );
+
+    i_result_cc : entity work.olo_base_cc_simple
+        generic map (
+            Width_g     => ResultWidth_c
+        )
+        port map (
+            In_Clk      => ClkTest,
+            In_Data     => Result_T,
+            In_Valid    => ResultValid_T,
+            Out_Clk     => Clk,
+            Out_RstIn   => Rst,
+            Out_Data    => Result_M,
+            Out_Valid   => ResultValid_M
+        );
+
+end architecture;
+"
+"This component synchronizes external signals and debounces them. The debouncing is implemented efficiently with a prescaler divider shared between all signals in order to keep resource usage as low as possible. The entity has two modes of operation. - In _LOW_LATENCY_ mode, an incoming edge is forwarded immediately (less than 5 clock cycles of delay). After the edge is forwarded to the output, the next edge can be detected only after the signal was stable for _DebounceTime_g_. - This mode of operation implies that single cycle input pulses are stretched to a pulse-width of _DebounceTime_g_. - In _GLITCH_FILTER_ mode, any signal change is only forwarded to the output after the signal was stable for _DebounceTime_g_ on the new level. - This mode of operation implies that single cycle input pulses are suppressed. Below figure provides an example waveform for both modes of operation.","
+
+library ieee;
+    use ieee.std_logic_1164.all;
+    use ieee.numeric_std.all;
+    use ieee.math_real.all;
+
+library work;
+    use work.olo_base_pkg_array.all;
+
+
+entity olo_intf_debounce is
+    generic (
+        ClkFrequency_g  : real;
+        DebounceTime_g  : real      := 20.0e-3;
+        Width_g         : positive  := 1;
+        IdleLevel_g     : std_logic := '0';
+        Mode_g          : string    := ""LOW_LATENCY""    -- LOW_LATENCY or GLITCH_FILTER
+    );
+    port (
+        Clk         : in    std_logic;
+        Rst         : in    std_logic;
+        DataAsync   : in    std_logic_vector(Width_g - 1 downto 0);
+        DataOut     : out   std_logic_vector(Width_g - 1 downto 0)
+    );
+end entity;
+
+
+architecture struct of olo_intf_debounce is
+
+    constant TargetTickFrequency_c : real    := 1.0/(DebounceTime_g/31.0);
+    constant TickCycles_c          : real    := ceil(ClkFrequency_g/TargetTickFrequency_c);
+    constant ActualTickFrequency_c : real    := ClkFrequency_g/TickCycles_c;
+    constant DebounceTicks_c       : integer := integer(ceil(DebounceTime_g*ActualTickFrequency_c));
+    constant UseStrobeDiv_c        : boolean := integer(TickCycles_c) >= 2;
+
+    constant Bits_c : integer := DataAsync'length;
+
+    signal DataSync : std_logic_vector(DataAsync'range);
+    signal Tick     : std_logic;
+
+    subtype Cnt_t is integer range 0 to DebounceTicks_c;
+    type Cnt_a is array (0 to Bits_c-1) of Cnt_t;
+
+    type TwoProcess_r is record
+        StableCnt : Cnt_a;
+        LastState : std_logic_vector(Bits_c-1 downto 0);
+        IsStable  : std_logic_vector(Bits_c-1 downto 0);
+        DataOut   : std_logic_vector(Bits_c-1 downto 0);
+    end record;
+
+    signal r, r_next : TwoProcess_r;
+
+begin
+
+    assert Mode_g = ""GLITCH_FILTER"" or Mode_g = ""LOW_LATENCY""
+        report ""olo_intf_debounce: Illegal Mode_g - "" & Mode_g
+        severity failure;
+
+    assert DebounceTicks_c >= 10
+        report ""olo_intf_debounce: DebounceTime too short (must be >= 10 clock cycles) - "" &
+               ""DebounceTime_g="" & real'image(DebounceTime_g) & "" ClkFrequency_g="" & real'image(ClkFrequency_g)
+        severity failure;
+
+    p_comb : process (r, DataSync, Tick) is
+        variable v : TwoProcess_r;
+    begin
+        v := r;
+
+        for i in 0 to DataAsync'length-1 loop
+
+            if Tick = '1' then
+                if r.StableCnt(i) = DebounceTicks_c then
+                    v.IsStable(i) := '1';
+                else
+                    v.StableCnt(i) := r.Stablecnt(i) + 1;
+                end if;
+            end if;
+
+            if DataSync(i) /= r.LastState(i) then
+                v.StableCnt(i) := 0;
+                v.IsStable(i)  := '0';
+            end if;
+
+            if Mode_g = ""GLITCH_FILTER"" then
+                if r.IsStable(i) = '1' then
+                    v.DataOut(i) := r.LastState(i);
+                end if;
+            end if;
+
+            if Mode_g = ""LOW_LATENCY"" then
+                if r.IsStable(i) = '1' then
+                    v.DataOut(i) := DataSync(i);
+                end if;
+            end if;
+        end loop;
+
+        v.LastState := DataSync;
+
+        DataOut <= r.DataOut;
+
+        r_next <= v;
+    end process;
+
+    p_seq : process (Clk) is
+    begin
+        if rising_edge(Clk) then
+            r <= r_next;
+            if Rst = '1' then
+                r.StableCnt <= (others => DebounceTicks_c);
+                r.LastState <= (others => IdleLevel_g);
+                r.IsStable  <= (others => '1');
+                r.DataOut   <= (others => IdleLevel_g);
+            end if;
+        end if;
+    end process;
+
+    i_sync : entity work.olo_intf_sync
+        generic map (
+            Width_g     => Width_g,
+            RstLevel_g  => IdleLevel_g
+        )
+        port map (
+            Clk         => Clk,
+            Rst         => Rst,
+            DataAsync   => DataAsync,
+            DataSync    => DataSync
+        );
+
+    g_use_strobe : if UseStrobeDiv_c generate
+
+        i_tickgen : entity work.olo_base_strobe_gen
+            generic map (
+                FreqClkHz_g    => ClkFrequency_g,
+                FreqStrobeHz_g => ActualTickFrequency_c
+            )
+            port map (
+                Clk         => Clk,
+                Rst         => Rst,
+                Out_Valid   => Tick
+            );
+
+    end generate;
+
+    g_no_strobe : if not UseStrobeDiv_c generate
+        Tick <= '1';
+    end generate;
+
+end architecture;"
+"This entity implements an I2C master that is multi-master capable (i.e. supports arbitration). The _olo_intf_i2c_master_ allows generating start, stop and repeated start conditions as well as transferring bytes in both directions. This entity also supports slaves that do clock-stretching. Addressing is not handled separately. To send the byte containing the address and the R/W bit, the normal byte transfer is used. The user is responsible for filling the address into bits 7:1 and the R/W flag into bit 0 of the data. The same applies for 10-bit addressing. The user is responsible to send the 10-bit addressing pattern using two byte transfers. The bus state (busy or free) is tracked based on start- and stop-conditions. However, if no transactions are ongoing (i.e. SCL = '1' and SDA = '1') for a configurable timeout, the bus is always regarded as free. This helps handling the case where a master starts a transaction and then (e.g. due to reset) aborts the transaction without sending a stop-condition. The user has three main interfaces: - The command interface (_Cmd_..._) allows  to select the next bus action to execute. Commands are: - _START_ Send a start condition (only allowed if bus is idle) - _STOP_ Send a stop condition (only allowed if bus is not idle) - _REPSTART_ Send a repeated start condition (only allowed if the bus is not idle) - _SEND_ Send a data byte (only allowed if the bus is not idle). The data to send is provided along with the command. - _RECEIVE_ Receive a data byte (only allowed if the bus is not idle). The ACK to send is provided along with the command. - On the response interface (_Resp_..._), the user receives one response per command as soon as the command is completed. More information like the received ACK bit, whether the command was aborted due to a lost arbitration, the received data or whether the command sequence was illegal is sent along with the response. - On the status interface (_Status_..._) the user can see if the I2C bus is currently busy or free and if a command timed out (i.e. the user failed to provide the next command within time, and hence the bus was released). For constants containing the command codes, a package _olo_intf_i2c_master_pkg_ is defined in the same VHDL file. **Note:** The I2C ports must be constrained manually. No solution was found for scoped timing constraints for inferred tristate buffers.","
+
+library ieee;
+    use ieee.std_logic_1164.all;
+    use ieee.numeric_std.all;
+    use ieee.math_real.all;
+
+library work;
+    use work.olo_base_pkg_math.all;
+    use work.olo_base_pkg_logic.all;
+
+package olo_intf_i2c_master_pkg is
+
+    constant I2cCmd_Start_c    : std_logic_vector(2 downto 0) := ""000"";
+    constant I2cCmd_Stop_c     : std_logic_vector(2 downto 0) := ""001"";
+    constant I2cCmd_RepStart_c : std_logic_vector(2 downto 0) := ""010"";
+    constant I2cCmd_Send_c     : std_logic_vector(2 downto 0) := ""011"";
+    constant I2cCmd_Receive_c  : std_logic_vector(2 downto 0) := ""100"";
+
+end package;
+
+library ieee;
+    use ieee.std_logic_1164.all;
+    use ieee.numeric_std.all;
+    use ieee.math_real.all;
+
+library work;
+    use work.olo_base_pkg_math.all;
+    use work.olo_base_pkg_logic.all;
+    use work.olo_base_pkg_attribute.all;
+    use work.olo_intf_i2c_master_pkg.all;
+
+entity olo_intf_i2c_master is
+    generic (
+        ClkFrequency_g      : real;
+        I2cFrequency_g      : real    := 100.0e3;
+        BusBusyTimeout_g    : real    := 1.0e-3;
+        CmdTimeout_g        : real    := 1.0e-3;
+        InternalTriState_g  : boolean := true;
+        DisableAsserts_g    : boolean := false
+    );
+    port (
+        Clk             : in    std_logic;
+        Rst             : in    std_logic;
+        Cmd_Ready       : out   std_logic;
+        Cmd_Valid       : in    std_logic;
+        Cmd_Command     : in    std_logic_vector(2 downto 0);
+        Cmd_Data        : in    std_logic_vector(7 downto 0);
+        Cmd_Ack         : in    std_logic;
+        Resp_Valid      : out   std_logic;
+        Resp_Command    : out   std_logic_vector(2 downto 0);
+        Resp_Data       : out   std_logic_vector(7 downto 0);
+        Resp_Ack        : out   std_logic;
+        Resp_ArbLost    : out   std_logic;
+        Resp_SeqErr     : out   std_logic;
+        Status_BusBusy  : out   std_logic;
+        Status_CmdTo    : out   std_logic;
+        I2c_Scl         : inout std_logic := 'Z';
+        I2c_Sda         : inout std_logic := 'Z';
+        I2c_Scl_i       : in    std_logic := '0';
+        I2c_Scl_o       : out   std_logic;
+        I2c_Scl_t       : out   std_logic;
+        I2c_Sda_i       : in    std_logic := '0';
+        I2c_Sda_o       : out   std_logic;
+        I2c_Sda_t       : out   std_logic
+    );
+end entity;
+
+architecture rtl of olo_intf_i2c_master is
+
+    constant BusyTimoutLimit_c    : integer := integer(ClkFrequency_g * BusBusyTimeout_g) - 1;
+    constant QuarterPeriodLimit_c : integer := integer(ceil(ClkFrequency_g / I2cFrequency_g / 4.0)) - 1;
+    constant CmdTimeoutLimit_c    : integer := integer(ClkFrequency_g * CmdTimeout_g) - 1;
+
+    type Fsm_t is (
+        BusIdle_s, BusBusy_s, MinIdle_s, Start1_s, Start2_s, WaitCmd_s, WaitLowCenter_s,
+        Stop1_s, Stop2_s, Stop3_s, RepStart1_s, DataBit1_s, DataBit2_s, DataBit3_s, DataBit4_s, ArbitLost_s
+    );
+
+    type TwoProcess_r is record
+        Status_BusBusy : std_logic;
+        Cmd_Ready      : std_logic;
+        SclLast        : std_logic;
+        SdaLast        : std_logic;
+        BusBusyToCnt   : unsigned(log2ceil(BusyTimoutLimit_c + 1) - 1 downto 0);
+        TimeoutCmdCnt  : unsigned(log2ceil(CmdTimeoutLimit_c + 1) - 1 downto 0);
+        QuartPeriodCnt : unsigned(log2ceil(QuarterPeriodLimit_c + 1) - 1 downto 0);
+        QPeriodTick    : std_logic;
+        CmdTypeLatch   : std_logic_vector(Cmd_Command'range);
+        CmdAckLatch    : std_logic;
+        Fsm            : Fsm_t;
+        SclOut         : std_logic;
+        SdaOut         : std_logic;
+        Resp_Valid     : std_logic;
+        Resp_Ack       : std_logic;
+        Resp_SeqErr    : std_logic;
+        Resp_Data      : std_logic_vector(7 downto 0);
+        Resp_ArbLost   : std_logic;
+        BitCnt         : unsigned(3 downto 0); -- 8 Data + 1 Ack = 9 = 4 bits
+        ShReg          : std_logic_vector(8 downto 0);
+        CmdTimeout     : std_logic;
+        Status_CmdTo   : std_logic;
+    end record;
+
+    signal r, r_next : TwoProcess_r;
+
+    attribute dont_touch of r : signal is DontTouch_SuppressChanges_c;
+
+    signal I2cScl_Input : std_logic;
+    signal I2cSda_Input : std_logic;
+    signal I2cScl_Sync  : std_logic;
+    signal I2cSda_Sync  : std_logic;
+
+begin
+
+    p_comb : process (r, I2cScl_Sync, I2cSda_Sync, Cmd_Valid, Cmd_Command, Cmd_Data, Cmd_Ack) is
+        variable v                     : TwoProcess_r;
+        variable SdaRe_v, SdaFe_v      : std_logic;
+        variable I2cStart_v, I2cStop_v : std_logic;
+    begin
+        v := r;
+
+        SdaRe_v   := not r.SdaLast and I2cSda_Sync;
+        SdaFe_v   := r.SdaLast and not I2cSda_Sync;
+        v.SclLast := I2cScl_Sync;
+        v.SdaLast := I2cSda_Sync;
+
+        I2cStart_v := r.SclLast and I2cScl_Sync and SdaFe_v;
+        I2cStop_v  := r.SclLast and I2cScl_Sync and SdaRe_v;
+
+        v.QPeriodTick := '0';
+        if (r.Fsm = BusIdle_s) or (r.Fsm = BusBusy_s) then
+            v.QuartPeriodCnt := (others => '0');
+        elsif r.QuartPeriodCnt = QuarterPeriodLimit_c then
+            v.QuartPeriodCnt := (others => '0');
+            v.QPeriodTick    := '1';
+        else
+            v.QuartPeriodCnt := r.QuartPeriodCnt + 1;
+        end if;
+
+        if r.Fsm = WaitCmd_s then
+            if r.TimeoutCmdCnt = CmdTimeoutLimit_c then
+                v.CmdTimeout := '1';
+            else
+                v.TimeoutCmdCnt := r.TimeoutCmdCnt + 1;
+            end if;
+        else
+            v.TimeoutCmdCnt := (others => '0');
+        end if;
+
+        if (r.Cmd_Ready = '1') and (Cmd_Valid = '1') then
+            v.CmdTypeLatch := Cmd_Command;
+            v.CmdAckLatch  := Cmd_Ack;
+        end if;
+
+        v.Resp_Valid   := '0';
+        v.Resp_Ack     := not r.ShReg(0);
+        v.Resp_Data    := r.ShReg(8 downto 1);
+        v.Resp_SeqErr  := '0';
+        v.Resp_ArbLost := '0';
+        v.Status_CmdTo := '0';
+        v.Cmd_Ready    := '0';
+
+        case r.Fsm is
+
+            when BusIdle_s =>
+                v.Cmd_Ready    := '1';
+                v.BusBusyToCnt := (others => '0');
+                v.SclOut       := '1';
+                v.SdaOut       := '1';
+                v.CmdTimeout   := '0';
+
+                if (r.Cmd_Ready = '1') and (Cmd_Valid = '1') then
+                    assert (Cmd_Command = I2cCmd_Start_c) or DisableAsserts_g
+                        report ""###ERROR###: olo_intf_i2c_master: In idle state, only I2cCmd_Start_c commands are allowed!""
+                        severity error;
+                    v.CmdTypeLatch := Cmd_Command;
+                    if Cmd_Command = I2cCmd_Start_c then
+                        v.Fsm       := Start1_s;
+                        v.Cmd_Ready := '0';
+                    else
+                        v.Resp_Valid  := '1';
+                        v.Resp_SeqErr := '1';
+                    end if;
+                elsif (I2cScl_Sync = '0') or (I2cStart_v = '1') then
+                    v.Fsm       := BusBusy_s;
+                    v.Cmd_Ready := '0';
+                end if;
+
+            when BusBusy_s =>
+                if I2cStop_v = '1' then
+                    v.Fsm := MinIdle_s;
+                end if;
+                if I2cScl_Sync = '0' then
+                    v.BusBusyToCnt := (others => '0');
+                elsif r.BusBusyToCnt = BusyTimoutLimit_c then
+                    v.Fsm := BusIdle_s;
+                else
+                    v.BusBusyToCnt := r.BusBusyToCnt + 1;
+                end if;
+
+                v.SclOut := '1';
+                v.SdaOut := '1';
+
+            when MinIdle_s =>
+                if r.QPeriodTick = '1' then
+                    v.Fsm := BusIdle_s;
+                end if;
+
+                v.SclOut := '1';
+                v.SdaOut := '1';
+
+            when Start1_s =>
+                if r.QPeriodTick = '1' then
+                    v.Fsm := Start2_s;
+                end if;
+
+                if I2cScl_Sync = '0' and r.CmdTypeLatch = I2cCmd_RepStart_c then
+                    v.QuartPeriodCnt := (others => '0');
+                end if;
+
+                if I2cSda_Sync = '0' then
+                    v.Fsm := ArbitLost_s;
+                end if;
+
+                v.SclOut := '1';
+                v.SdaOut := '1';
+
+            when Start2_s =>
+                if r.QPeriodTick = '1' then
+                    v.Fsm        := WaitCmd_s;
+                    v.Resp_Valid := '1';
+                end if;
+                v.SclOut := '1';
+                v.SdaOut := '0';
+
+
+            when WaitCmd_s =>
+                v.Cmd_Ready := '1';
+                v.SclOut    := '0';
+
+                if (r.Cmd_Ready = '1') and (Cmd_Valid = '1') then
+                    assert (Cmd_Command = I2cCmd_Stop_c) or (Cmd_Command = I2cCmd_RepStart_c) or
+                           (Cmd_Command = I2cCmd_Send_c) or (Cmd_Command = I2cCmd_Receive_c) or DisableAsserts_g
+                        report ""###ERROR###: olo_intf_i2c_master: In WaitCmd_s state, I2cCmd_Start_c commands are not allowed!""
+                        severity error;
+                    if (Cmd_Command = I2cCmd_Stop_c) or (Cmd_Command = I2cCmd_RepStart_c) or
+                       (Cmd_Command = I2cCmd_Send_c) or (Cmd_Command = I2cCmd_Receive_c) then
+                        v.Fsm       := WaitLowCenter_s;
+                        v.Cmd_Ready := '0';
+                    else
+                        v.Resp_Valid  := '1';
+                        v.Resp_SeqErr := '1';
+                    end if;
+                    v.ShReg := Cmd_Data & '0';
+                elsif r.CmdTimeout = '1' then
+                    v.Fsm          := WaitLowCenter_s;
+                    v.Cmd_Ready    := '0';
+                    v.Status_CmdTo := '1';
+                end if;
+
+            when WaitLowCenter_s =>
+                v.SclOut := '0';
+                v.BitCnt := (others => '0');
+
+                if r.QPeriodTick = '1' then
+                    if r.CmdTimeout = '1' then
+                        v.Fsm := Stop1_s;
+                    else
+
+                        case r.CmdTypeLatch is
+                            when I2cCmd_Stop_c => v.Fsm := Stop1_s;
+                            when I2cCmd_RepStart_c => v.Fsm := RepStart1_s;
+                            when I2cCmd_Send_c => v.Fsm := DataBit1_s;
+                            when I2cCmd_Receive_c => v.Fsm := DataBit1_s;
+                            when others => null; -- unreacable code
+                        end case;
+
+                    end if;
+                end if;
+
+
+            when RepStart1_s =>
+                if r.QPeriodTick = '1' then
+                    v.Fsm := Start1_s;
+
+                    if I2cSda_Sync = '0' then
+                        v.Fsm := ArbitLost_s;
+                    end if;
+                end if;
+                v.SclOut := '0';
+                v.SdaOut := '1';
+
+
+            when DataBit1_s =>
+                if r.QPeriodTick = '1' then
+                    v.Fsm := DataBit2_s;
+                end if;
+                v.SclOut := '0';
+
+                if r.CmdTypeLatch = I2cCmd_Send_c then
+                    if r.BitCnt = 8 then
+                        v.SdaOut := '1';
+                    else
+                        v.SdaOut := r.ShReg(8);
+                    end if;
+                else
+                    if r.BitCnt = 8 then
+                        if r.CmdAckLatch = '1' then
+                            v.SdaOut := '0';
+                        else
+                            v.SdaOut := '1';
+                        end if;
+                    else
+                        v.SdaOut := '1';
+                    end if;
+                end if;
+
+            when DataBit2_s =>
+                if r.QPeriodTick = '1' then
+                    v.Fsm := DataBit3_s;
+                    v.ShReg := r.ShReg(7 downto 0) & I2cSda_Sync;
+                end if;
+                v.SclOut := '1';
+
+                if I2cScl_Sync = '0' then
+                    v.QuartPeriodCnt := (others => '0');
+                end if;
+
+                if (r.CmdTypeLatch = I2cCmd_Send_c) and (r.BitCnt /= 8) then
+                    if I2cSda_Sync /= r.SdaOut then
+                        v.Fsm := ArbitLost_s;
+                    end if;
+                end if;
+
+            when DataBit3_s =>
+                if r.QPeriodTick = '1' then
+                    if r.BitCnt = 8 then
+                        v.Fsm        := WaitCmd_s;
+                        v.Resp_Valid := '1';
+                    else
+                        v.Fsm := DataBit4_s;
+                    end if;
+                end if;
+                v.SclOut := '1';
+
+                if (r.CmdTypeLatch = I2cCmd_Send_c) and (r.BitCnt /= 8) then
+                    if I2cSda_Sync /= r.SdaOut then
+                        v.Fsm := ArbitLost_s;
+                    end if;
+                end if;
+
+            when DataBit4_s =>
+                if r.QPeriodTick = '1' then
+                    v.Fsm    := DataBit1_s;
+                    v.BitCnt := r.BitCnt + 1;
+                end if;
+                v.SclOut := '0';
+
+
+            when Stop1_s =>
+                if r.QPeriodTick = '1' then
+                    v.Fsm := Stop2_s;
+                end if;
+                v.SclOut := '0';
+                v.SdaOut := '0';
+
+            when Stop2_s =>
+                if r.QPeriodTick = '1' then
+                    v.Fsm := Stop3_s;
+                end if;
+                v.SclOut := '1';
+                v.SdaOut := '0';
+
+                if I2cScl_Sync = '0' then
+                    v.QuartPeriodCnt := (others => '0');
+                end if;
+
+            when Stop3_s =>
+                if r.QPeriodTick = '1' then
+                    if I2cSda_Sync = '0' then
+                        v.Fsm := ArbitLost_s;
+                    else
+                        v.Fsm := BusIdle_s;
+                        if r.CmdTimeout = '0' then
+                            v.Resp_Valid := '1';
+                        end if;
+                    end if;
+                end if;
+                v.SclOut := '1';
+                v.SdaOut := '1';
+
+            when ArbitLost_s =>
+                v.Fsm          := BusBusy_s;
+                v.Resp_Valid   := '1';
+                v.Resp_Ack     := '0';
+                v.Resp_ArbLost := '1';
+                v.SclOut       := '1';
+                v.SdaOut       := '1';
+
+            when others => null; -- unreacable code
+        end case;
+
+        if r.Fsm = BusIdle_s then
+            v.Status_BusBusy := '0';
+        else
+            v.Status_BusBusy := '1';
+        end if;
+
+        r_next <= v;
+    end process;
+
+    Status_BusBusy <= r.Status_BusBusy;
+    Cmd_Ready      <= r.Cmd_Ready;
+    Resp_Valid     <= r.Resp_Valid;
+    Resp_Command   <= r.CmdTypeLatch;
+    Resp_ArbLost   <= r.Resp_ArbLost;
+    Resp_Ack       <= r.Resp_Ack;
+    Resp_Data      <= r.Resp_Data;
+    Resp_SeqErr    <= r.Resp_SeqErr;
+    Status_CmdTo   <= r.Status_CmdTo;
+
+    g_int_tristate : if InternalTriState_g generate
+        I2c_Scl   <= 'Z' when r.SclOut = '1' else '0';
+        I2c_Sda   <= 'Z' when r.SdaOut = '1' else '0';
+        I2c_Scl_o <= '0';
+        I2c_Sda_o <= '0';
+        I2c_Scl_t <= '1';
+        I2c_Sda_t <= '1';
+    end generate;
+
+    g_ext_tristatte : if not InternalTriState_g generate
+        I2c_Scl_o <= r.SclOut;
+        I2c_Sda_o <= r.SdaOut;
+        I2c_Scl_t <= r.SclOut;
+        I2c_Sda_t <= r.SdaOut;
+        I2c_Scl   <= 'Z';
+        I2c_Sda   <= 'Z';
+    end generate;
+
+    p_seq : process (Clk) is
+    begin
+        if rising_edge(Clk) then
+            r <= r_next;
+            if Rst = '1' then
+                r.Status_BusBusy <= '0';
+                r.Cmd_Ready      <= '0';
+                r.SclLast        <= '1';
+                r.SdaLast        <= '1';
+                r.BusBusyToCnt   <= (others => '0');
+                r.Fsm            <= BusIdle_s;
+                r.SclOut         <= '1';
+                r.SdaOut         <= '1';
+                r.Resp_Valid     <= '0';
+            end if;
+        end if;
+    end process;
+
+    I2cScl_Input <= to01X(I2c_Scl) when InternalTriState_g else I2c_Scl_i;
+    I2cSda_Input <= to01X(I2c_Sda) when InternalTriState_g else I2c_Sda_i;
+
+    i_sync : entity work.olo_intf_sync
+        generic map (
+            Width_g     => 2
+        )
+        port map (
+            Clk             => Clk,
+            DataAsync(0)    => I2cScl_Input,
+            DataAsync(1)    => I2cSda_Input,
+            DataSync(0)     => I2cScl_Sync,
+            DataSync(1)     => I2cSda_Sync
+        );
+
+end architecture;"
+"This entity implements a simple SPI master. All common SPI settings are configurable to ensure the master can be configured for different applications. The clock and data phase is configurable according to the SPI standard terminology described in the picture below: <p align=""center""><img src=""spi/spi_clk_data_phases.png"" alt=""CPHA/CPOL""> </p> <p align=""center""> CPOL and CPHA meaning </p> For CPHA = 1, the sampling happens on the second edge (blue) and data is applied on the first edge (red). For CPHA = 0 it is the opposite way. The number of bits to transfer can be chosen per transaction. Alternatively, the related port _Cmd_TransWidth_ can be left unconnected - in this case, all transactions are _MaxTransWidth_g_ bits. Similarly the slave to communicate with can be selected through _Cmd_Slave_ for every transaction ot the signal can be left unconnected when only one slave is used - in this case all transactions implicitly are for communicating with slave 0. The user interface (FPGA side) is split into a command interface (_Cmd_..._) and a response interface (_Resp_..._). Below figure summarizes how they behave timing-wise.","
+
+library ieee;
+    use ieee.std_logic_1164.all;
+    use ieee.numeric_std.all;
+    use ieee.math_real.all;
+
+library work;
+    use work.olo_base_pkg_math.all;
+    use work.olo_base_pkg_logic.all;
+    use work.olo_base_pkg_attribute.all;
+
+entity olo_intf_spi_master is
+    generic (
+        ClkFreq_g       : real;
+        SclkFreq_g      : real                 := 1.0e6;
+        MaxTransWidth_g : positive             := 32;
+        CsHighTime_g    : real                 := 20.0e-9;
+        SpiCpol_g       : natural range 0 to 1 := 1;
+        SpiCpha_g       : natural range 0 to 1 := 1;
+        SlaveCnt_g      : positive             := 1;
+        LsbFirst_g      : boolean              := false;
+        MosiIdleState_g : std_logic            := '0'
+    );
+    port (
+        Clk             : in    std_logic;
+        Rst             : in    std_logic;
+        Cmd_Valid       : in    std_logic;
+        Cmd_Ready       : out   std_logic;
+        Cmd_Slave       : in    std_logic_vector(log2ceil(SlaveCnt_g) - 1 downto 0)      := (others => '0');
+        Cmd_Data        : in    std_logic_vector(MaxTransWidth_g - 1 downto 0)           := (others => '0');
+        Cmd_TransWidth  : in    std_logic_vector(log2ceil(MaxTransWidth_g+1)-1 downto 0) := toUslv(MaxTransWidth_g, log2ceil(MaxTransWidth_g+1));
+        Resp_Valid      : out   std_logic;
+        Resp_Data       : out   std_logic_vector(MaxTransWidth_g - 1 downto 0);
+        Spi_Sclk        : out   std_logic;
+        Spi_Mosi        : out   std_logic;
+        Spi_Miso        : in    std_logic                                                := '0';
+        Spi_Cs_n        : out   std_logic_vector(SlaveCnt_g - 1 downto 0)
+    );
+end entity;
+
+architecture rtl of olo_intf_spi_master is
+
+    type State_t is (Idle_s, SftComp_s, ClkInact_s, ClkAct_s, CsHigh_s);
+
+    constant ClkDiv_c         : natural := integer(round(ClkFreq_g/SclkFreq_g));
+    constant ClkDivThres_c    : natural := ClkDiv_c / 2 - 1;
+    constant CsHighCycles_c   : natural := integer(ceil(ClkFreq_g*CsHighTime_g));
+    constant SclkFreqResult_c : real    := ClkFreq_g/(2.0*real(ClkDivThres_c+1));
+
+    type TwoProcess_r is record
+        State      : State_t;
+        StateLast  : State_t;
+        shiftReg   : std_logic_vector(MaxTransWidth_g - 1 downto 0);
+        RdData     : std_logic_vector(MaxTransWidth_g - 1 downto 0);
+        Spi_Cs_n   : std_logic_vector(SlaveCnt_g - 1 downto 0);
+        Spi_Sclk   : std_logic;
+        Spi_Mosi   : std_logic;
+        ClkDivCnt  : integer range 0 to ClkDivThres_c;
+        BitCnt     : integer range 0 to MaxTransWidth_g;
+        CsHighCnt  : integer range 0 to CsHighCycles_c - 1;
+        Busy       : std_logic;
+        Done       : std_logic;
+        MosiNext   : std_logic;
+        TransWidth : integer range 0 to MaxTransWidth_g;
+    end record;
+
+    signal r, r_next : TwoProcess_r;
+
+    signal SpiMiso_i : std_logic;
+
+    attribute dont_merge of SpiMiso_i   : signal is DontMerge_SuppressChanges_c;
+    attribute preserve of SpiMiso_i     : signal is Preserve_SuppressChanges_c;
+    attribute keep of SpiMiso_i         : signal is Keep_SuppressChanges_c;
+    attribute dont_touch of SpiMiso_i   : signal is DontTouch_SuppressChanges_c;
+    attribute syn_keep of SpiMiso_i     : signal is SynKeep_SuppressChanges_c;
+    attribute syn_preserve of SpiMiso_i : signal is SynPreserve_SuppressChanges_c;
+
+    function getClockLevel (ClkActive : boolean) return std_logic is
+    begin
+        if SpiCpol_g = 0 then
+            if ClkActive then
+                return '1';
+            else
+                return '0';
+            end if;
+        else
+            if ClkActive then
+                return '0';
+            else
+                return '1';
+            end if;
+        end if;
+    end function;
+
+    procedure shiftReg (
+        signal BeforeShift  : in std_logic_vector(MaxTransWidth_g-1 downto 0);
+        variable AfterShift : out std_logic_vector(MaxTransWidth_g-1 downto 0);
+        signal InputBit     : in std_logic;
+        variable OutputBit  : out std_logic;
+        TransWidth          : in integer range 0 to MaxTransWidth_g) is
+    begin
+        if LsbFirst_g then
+            OutputBit                := BeforeShift(0);
+            AfterShift               := '0' & BeforeShift(BeforeShift'high downto 1);
+            AfterShift(TransWidth-1) := InputBit;
+        else
+            OutputBit  := BeforeShift(TransWidth-1);
+            AfterShift := BeforeShift(BeforeShift'high - 1 downto 0) & InputBit;
+        end if;
+    end procedure;
+
+begin
+
+    assert abs(SclkFreqResult_c/SclkFreq_g - 1.0) < 0.1
+        report ""###ERROR###: olo_intf_spi_master - SclkFreq_g is not within 10% of the actual Sclk frequency""
+        severity error;
+
+    SpiMiso_i <= Spi_Miso;
+
+    p_comb : process (r, Cmd_Valid, Cmd_Data, SpiMiso_i, Cmd_Slave, Cmd_TransWidth) is
+        variable v : TwoProcess_r;
+    begin
+        v := r;
+
+        v.Done := '0';
+
+        case r.State is
+            when Idle_s =>
+                if Cmd_Valid = '1' then
+                    v.shiftReg                                  := Cmd_Data;
+                    v.Spi_Cs_n(to_integer(unsigned(Cmd_Slave))) := '0';
+                    v.State                                     := SftComp_s;
+                    v.Busy                                      := '1';
+                    v.TransWidth                                := fromUslv(Cmd_TransWidth);
+                end if;
+                v.CsHighCnt := 0;
+                v.ClkDivCnt := 0;
+                v.BitCnt    := 0;
+
+            when SftComp_s =>
+                v.State := ClkInact_s;
+                if SpiCpha_g = 0 then
+                    shiftReg(r.shiftReg, v.shiftReg, SpiMiso_i, v.MosiNext, r.TransWidth);
+                end if;
+
+            when ClkInact_s =>
+                v.Spi_Sclk := getClockLevel(false);
+                if r.ClkDivCnt = 0 then
+                    if SpiCpha_g = 0 then
+                        v.Spi_Mosi := r.MosiNext;
+                    else
+                        shiftReg(r.shiftReg, v.shiftReg, SpiMiso_i, v.MosiNext, r.TransWidth);
+                    end if;
+                end if;
+                if r.ClkDivCnt = ClkDivThres_c then
+                    if r.BitCnt = r.TransWidth then
+                        v.Spi_Mosi := MosiIdleState_g;
+                        v.State    := CsHigh_s;
+                    else
+                        v.State := ClkAct_s;
+                    end if;
+                    v.ClkDivCnt := 0;
+                else
+                    v.ClkDivCnt := r.ClkDivCnt + 1;
+                end if;
+
+            when ClkAct_s =>
+                v.Spi_Sclk := getClockLevel(true);
+                if r.ClkDivCnt = 0 then
+                    if SpiCpha_g = 1 then
+                        v.Spi_Mosi := r.MosiNext;
+                    else
+                        shiftReg(r.shiftReg, v.shiftReg, SpiMiso_i, v.MosiNext, r.TransWidth);
+                    end if;
+                end if;
+                if r.ClkDivCnt = ClkDivThres_c then
+                    v.State     := ClkInact_s;
+                    v.ClkDivCnt := 0;
+                    v.BitCnt    := r.BitCnt + 1;
+                else
+                    v.ClkDivCnt := r.ClkDivCnt + 1;
+                end if;
+
+            when CsHigh_s =>
+                v.Spi_Cs_n := (others => '1');
+                if r.CsHighCnt = CsHighCycles_c - 1 then
+                    v.State  := Idle_s;
+                    v.Busy   := '0';
+                    v.Done   := '1';
+                    v.RdData := r.shiftReg;
+                else
+                    v.CsHighCnt := r.CsHighCnt + 1;
+                end if;
+
+            when others => null; -- unreachable code
+        end case;
+
+        r_next <= v;
+    end process;
+
+    Cmd_Ready  <= not r.Busy;
+    Resp_Valid <= r.Done;
+    Resp_Data  <= r.RdData;
+    Spi_Sclk   <= r.Spi_Sclk;
+    Spi_Cs_n   <= r.Spi_Cs_n;
+    Spi_Mosi   <= r.Spi_Mosi;
+
+    p_seq : process (Clk) is
+    begin
+        if rising_edge(Clk) then
+            r <= r_next;
+            if Rst = '1' then
+                r.State    <= Idle_s;
+                r.Spi_Cs_n <= (others => '1');
+                r.Spi_Sclk <= getClockLevel(false);
+                r.Busy     <= '0';
+                r.Done     <= '0';
+                r.Spi_Mosi <= MosiIdleState_g;
+            end if;
+        end if;
+    end process;
+
+end architecture;"
+"This entity implements a simple SPI slave. All common SPI settings are configurable to ensure the master can be configured for different applications. The clock and data phase is configurable according to the SPI standard terminology (CPHA/CPOL). See [Details](#details) for more information. The component allows single transactions (where _CS_n_ goes high after every transaction) and consecutive transactions (where _CS_n_ does not go high between transactions), which makes it flexible to implement various protocols. See [Details](#details) for more information. On the user-side there are 3 AXI4-Stream interfaces: - TX data (data transmitted from the slave - through MISO) - RX data (data received from the master - through MOSI) - Response - informing the user whether TX data was transmitted or if the master aborted the transaction by pulling _CS_n_ high. - The Response interface is optional and in most cases can be omitted. The all SPI signals are properly synchronized to _Clk_ using [olo_intf_sync](./olo_intf_sync.md) within _olo_intf_spi_slave_. The maximum supported _Spi_Sclk_ frequency is 10x less than the _Clk_ frequency (with some tricks up to 8x less).","
+
+library ieee;
+    use ieee.std_logic_1164.all;
+    use ieee.numeric_std.all;
+
+library work;
+    use work.olo_base_pkg_math.all;
+    use work.olo_base_pkg_logic.all;
+
+entity olo_intf_spi_slave is
+    generic (
+        TransWidth_g                : positive             := 32;
+        SpiCpol_g                   : natural range 0 to 1 := 0;
+        SpiCpha_g                   : natural range 0 to 1 := 0;
+        LsbFirst_g                  : boolean              := false;
+        ConsecutiveTransactions_g   : boolean              := false;
+        InternalTriState_g          : boolean              := true
+    );
+    port (
+        Clk             : in    std_logic;
+        Rst             : in    std_logic;
+        Rx_Valid        : out   std_logic;
+        Rx_Data         : out   std_logic_vector(TransWidth_g - 1 downto 0);
+        Tx_Valid        : in    std_logic                                   := '1';
+        Tx_Ready        : out   std_logic;
+        Tx_Data         : in    std_logic_vector(TransWidth_g - 1 downto 0) := (others => '0');
+        Resp_Valid      : out   std_logic;
+        Resp_Sent       : out   std_logic;
+        Resp_Aborted    : out   std_logic;
+        Resp_CleanEnd   : out   std_logic;
+        Spi_Sclk        : in    std_logic;
+        Spi_Mosi        : in    std_logic                                   := '0';
+        Spi_Cs_n        : in    std_logic;
+        Spi_Miso        : out   std_logic;
+        Spi_Miso_o      : out   std_logic;
+        Spi_Miso_t      : out   std_logic
+    );
+end entity;
+
+architecture rtl of olo_intf_spi_slave is
+
+    type State_t is (Idle_s, LatchTx_s, WaitSampleEdge_s, WaitInactiveEdge_s, WaitCsHigh_s);
+
+    type TwoProcess_r is record
+        SpiCsnLast      : std_logic;
+        SpiSclkLast     : std_logic;
+        State           : State_t;
+        Tx_Ready        : std_logic;
+        SpiMisoData     : std_logic;
+        SpiMisoTristate : std_logic;
+        BitCnt          : integer range 0 to TransWidth_g;
+        ShiftReg        : std_logic_vector(TransWidth_g - 1 downto 0);
+        IsConsecutive   : boolean;
+        Rx_Valid        : std_logic;
+        Rx_Data         : std_logic_vector(TransWidth_g - 1 downto 0);
+        Resp_Sent       : std_logic;
+        Resp_Aborted    : std_logic;
+        Resp_Valid      : std_logic;
+        Resp_CleanEnd   : std_logic;
+        RxOutput        : std_logic;
+        DataLatched     : std_logic;
+    end record;
+
+    signal r, r_next : TwoProcess_r;
+
+    signal SpiMosi_i : std_logic;
+    signal SpiSclk_i : std_logic;
+    signal SpiCsn_i  : std_logic;
+
+    constant TxIdx_c : integer := choose(LsbFirst_g, 0, TransWidth_g - 1);
+
+begin
+
+    p_comb : process (r, Tx_Data, Tx_Valid, SpiSclk_i, SpiMosi_i, SpiCsn_i) is
+        variable v                  : TwoProcess_r;
+        variable CsnRe_v, CsnFe_v   : std_logic;
+        variable SclkRe_v, SclkFe_v : std_logic;
+        variable SampleEdge_v       : std_logic;
+        variable TrasmitEdge_v      : std_logic;
+        variable LeaveState_v       : boolean;
+    begin
+        v := r;
+
+        CsnRe_v         := '0';
+        CsnFe_v         := '0';
+        SclkRe_v        := '0';
+        SclkFe_v        := '0';
+        LeaveState_v    := false;
+        v.Rx_Valid      := '0';
+        v.Resp_Sent     := '0';
+        v.Resp_Aborted  := '0';
+        v.Resp_Valid    := '0';
+        v.RxOutput      := '0';
+        v.Resp_CleanEnd := '0';
+
+        if SpiCsn_i /= to01(r.SpiCsnLast) then
+            CsnRe_v := SpiCsn_i;
+            CsnFe_v := not SpiCsn_i;
+        end if;
+        v.SpiCsnLast := SpiCsn_i;
+        if SpiSclk_i /= to01(r.SpiSclkLast) then
+            SclkRe_v := SpiSclk_i;
+            SclkFe_v := not SpiSclk_i;
+        end if;
+        v.SpiSclkLast := SpiSclk_i;
+        if SpiCpol_g = SpiCpha_g then
+            SampleEdge_v  := SclkRe_v;
+            TrasmitEdge_v := SclkFe_v;
+        else
+            SampleEdge_v  := SclkFe_v;
+            TrasmitEdge_v := SclkRe_v;
+        end if;
+
+        case r.State is
+            when Idle_s =>
+                v.SpiMisoTristate := '1';
+                if CsnFe_v = '1' then
+                    v.State       := LatchTx_s;
+                    v.DataLatched := '0';
+                    v.Tx_Ready    := '1';
+                end if;
+                v.IsConsecutive := false;
+
+            when LatchTx_s =>
+                v.BitCnt := 0;
+                if Tx_Valid = '1' then
+                    v.ShiftReg    := Tx_Data;
+                    v.Tx_Ready    := '0';
+                    v.DataLatched := '1';
+                    v.SpiMisoData := Tx_Data(TxIdx_c);
+                end if;
+                if SpiCpha_g = 0 and not r.IsConsecutive then
+                    LeaveState_v := true;
+                else
+                    if TrasmitEdge_v = '1' then
+                        LeaveState_v := true;
+                    end if;
+                end if;
+                if LeaveState_v then
+                    v.State := WaitSampleEdge_s;
+                    if r.DataLatched = '0' and Tx_Valid = '0' then
+                        v.ShiftReg := (others => '0');
+                    end if;
+                    v.Tx_Ready := '0';
+                    v.SpiMisoData     := v.ShiftReg(TxIdx_c);
+                    v.SpiMisoTristate := '0';
+                end if;
+
+            when WaitSampleEdge_s =>
+                if SampleEdge_v = '1' then
+                    if LsbFirst_g = false then
+                        v.ShiftReg    := r.ShiftReg(r.ShiftReg'high - 1 downto 0) & SpiMosi_i;
+                        v.SpiMisoData := r.ShiftReg(r.ShiftReg'high-1);
+                    else
+                        v.ShiftReg    := SpiMosi_i & r.ShiftReg(r.ShiftReg'high downto 1);
+                        v.SpiMisoData := r.ShiftReg(1);
+                    end if;
+                    if r.BitCnt = TransWidth_g - 1 then
+                        v.SpiMisoData := r.SpiMisoData;
+                        v.RxOutput := '1'; -- Done in next cycle to await shift register update
+                        v.Resp_Valid := '1';
+                        v.Resp_Sent  := '1';
+                        if ConsecutiveTransactions_g then
+                            v.State       := LatchTx_s;
+                            v.DataLatched := '0';
+                            v.Tx_Ready    := '1';
+                        else
+                            v.State := WaitCsHigh_s;
+                        end if;
+                    else
+                        v.State := WaitInactiveEdge_s;
+                    end if;
+                end if;
+                v.IsConsecutive := true;
+
+            when WaitInactiveEdge_s =>
+                if TrasmitEdge_v = '1' then
+                    v.State  := WaitSampleEdge_s;
+                    v.BitCnt := r.BitCnt + 1;
+                end if;
+
+            when WaitCsHigh_s => null;  -- Return to idle is handled after FSM
+
+            when others => null; -- unreachable code
+        end case;
+
+        if r.RxOutput = '1' then
+            v.Rx_Valid := '1';
+            v.Rx_Data  := r.ShiftReg;
+        end if;
+
+        if SpiCsn_i = '1' then
+            v.State           := Idle_s;
+            v.SpiMisoTristate := '1';
+            if r.State /= WaitCsHigh_s and r.State /= Idle_s and r.DataLatched = '1' then
+                v.Resp_Valid   := '1';
+                v.Resp_Aborted := '1';
+            elsif r.State /= Idle_s then
+                v.Resp_Valid    := '1';
+                v.Resp_CleanEnd := '1';
+            end if;
+        end if;
+
+        r_next <= v;
+    end process;
+
+    Rx_Valid      <= r.Rx_Valid;
+    Rx_Data       <= r.Rx_Data;
+    Tx_Ready      <= r.Tx_Ready;
+    Resp_Valid    <= r.Resp_Valid;
+    Resp_Sent     <= r.Resp_Sent;
+    Resp_Aborted  <= r.Resp_Aborted;
+    Resp_CleanEnd <= r.Resp_CleanEnd;
+
+    g_int_tristate : if InternalTriState_g generate
+        Spi_Miso <= r.SpiMisoData when r.SpiMisoTristate = '0' else 'Z';
+    end generate;
+
+    g_ext_tristate : if not InternalTriState_g generate
+        Spi_Miso_o <= r.SpiMisoData;
+        Spi_Miso_t <= r.SpiMisoTristate;
+    end generate;
+
+    p_seq : process (Clk) is
+    begin
+        if rising_edge(Clk) then
+            r <= r_next;
+            if Rst = '1' then
+                r.SpiCsnLast      <= '1';
+                r.State           <= Idle_s;
+                r.Tx_Ready        <= '0';
+                r.SpiMisoTristate <= '1';
+                r.RxOutput        <= '0';
+            end if;
+        end if;
+    end process;
+
+    b_sync : block is
+        signal SyncIn, SyncOut : std_logic_vector(2 downto 0);
+    begin
+        SyncIn(0) <= Spi_Sclk;
+        SyncIn(1) <= Spi_Mosi;
+        SyncIn(2) <= Spi_Cs_n;
+
+        i_sync : entity work.olo_intf_sync
+            generic map (
+                Width_g     => 3,
+                RstLevel_g  => '1'
+            )
+            port map (
+                Clk         => Clk,
+                Rst         => Rst,
+                DataAsync   => SyncIn,
+                DataSync    => SyncOut
+            );
+
+        SpiSclk_i <= SyncOut(0);
+        SpiMosi_i <= SyncOut(1);
+        SpiCsn_i  <= SyncOut(2);
+    end block;
+
+end architecture;"
+"This component implements a N-stage synchronizer for synchronizing external signals to the internal clock. It also sets all the attributes required for proper synthesis. Note that this synchronizer does not guarantee that all bits arrive in the same clock cycle at the destination clock domain, therefore it can only be used for independent single-bit signals. Do not use it to transfer multi-bit signals (e.g. numbers) where it is important that all the bits are updated in the same clock cycle. It is suggested to use this entity only for synchronizing external signals. For synchronizing FPGA internal signals between clocks, the clock crossings in _base_ shall be used (_olo_base_cc_..._). For _AMD_ tools (_Vivado_) an automatic constraint file exists, which automatically identifies all _olo_intf_sync_ instances and constrains them correctly. To use the automatic constraints file, follow the steps described in [clock crossing principles](../base/clock_crossing_principles.md) but use the constraints file **Note:** Automatic constraining currently only works for _AMD_ tools (_Vivado_) and the usage in VHDL. Manual constraints are required for Verilog or other tools.","
+
+library ieee;
+    use ieee.std_logic_1164.all;
+    use ieee.numeric_std.all;
+
+library work;
+    use work.olo_base_pkg_attribute.all;
+
+
+entity olo_intf_sync is
+    generic (
+        Width_g      : positive              := 1;
+        RstLevel_g   : std_logic             := '0';
+        SyncStages_g : positive range 2 to 4 := 2
+    );
+    port (
+        Clk         : in    std_logic;
+        Rst         : in    std_logic := '0';
+        DataAsync   : in    std_logic_vector(Width_g - 1 downto 0);
+        DataSync    : out   std_logic_vector(Width_g - 1 downto 0)
+    );
+end entity;
+
+
+architecture struct of olo_intf_sync is
+
+    type SyncStages_t is array(0 to SyncStages_g - 2) of std_logic_vector(Width_g - 1 downto 0);
+
+    signal Reg0 : std_logic_vector(Width_g - 1 downto 0) := (others => RstLevel_g);
+    signal RegN : SyncStages_t                           := (others => (others => RstLevel_g));
+
+    attribute shreg_extract of Reg0 : signal is ShregExtract_SuppressExtraction_c;
+    attribute shreg_extract of RegN : signal is ShregExtract_SuppressExtraction_c;
+
+    attribute syn_srlstyle of Reg0 : signal is SynSrlstyle_FlipFlops_c;
+    attribute syn_srlstyle of RegN : signal is SynSrlstyle_FlipFlops_c;
+
+    attribute dont_merge of Reg0 : signal is DontMerge_SuppressChanges_c;
+    attribute dont_merge of RegN : signal is DontMerge_SuppressChanges_c;
+
+    attribute preserve of Reg0 : signal is Preserve_SuppressChanges_c;
+    attribute preserve of RegN : signal is Preserve_SuppressChanges_c;
+
+    attribute syn_keep of Reg0 : signal is SynKeep_SuppressChanges_c;
+    attribute syn_keep of RegN : signal is SynKeep_SuppressChanges_c;
+
+    attribute syn_preserve of Reg0 : signal is SynPreserve_SuppressChanges_c;
+    attribute syn_preserve of RegN : signal is SynPreserve_SuppressChanges_c;
+
+    attribute async_reg of Reg0 : signal is AsyncReg_TreatAsync_c;
+    attribute async_reg of RegN : signal is AsyncReg_TreatAsync_c;
+
+begin
+
+    p_outff : process (Clk) is
+    begin
+        if rising_edge(Clk) then
+            Reg0    <= DataAsync;
+            RegN(0) <= Reg0;
+
+            for i in 1 to RegN'high loop
+                RegN(i) <= RegN(i - 1);
+            end loop;
+
+            if Rst = '1' then
+                Reg0 <= (others => RstLevel_g);
+                RegN <= (others => (others => RstLevel_g));
+            end if;
+        end if;
+    end process;
+
+    DataSync <= RegN(RegN'high);
+
+end architecture;
+"
+"This entity implements an UART. It is designed to run high baud-rates (up to 10% of the clock frequency). Parity checking for RX and parity calculation for TX is done internally in _olo_intf_uart_. The _Uart_Rx_ line is synchronized internally inside _olo_intf_uart_. The UART protocol is commonly known and hence not described here. A good and concise description of the protocol can be found [here](https://ece353.engr.wisc.edu/serial-interfaces/uart-basics/).","
+
+library ieee;
+    use ieee.std_logic_1164.all;
+    use ieee.numeric_std.all;
+    use ieee.math_real.all;
+
+library work;
+    use work.olo_base_pkg_math.all;
+    use work.olo_base_pkg_logic.all;
+
+entity olo_intf_uart is
+    generic (
+        ClkFreq_g       : real;
+        BaudRate_g      : real                  := 115.2e3;
+        DataBits_g      : positive range 7 to 9 := 8;
+        StopBits_g      : string                := ""1"";
+        Parity_g        : string                := ""none""
+    );
+    port (
+        Clk             : in    std_logic;
+        Rst             : in    std_logic;
+        Tx_Valid        : in    std_logic                                 := '0';
+        Tx_Ready        : out   std_logic;
+        Tx_Data         : in    std_logic_vector(DataBits_g - 1 downto 0) := (others => '0');
+        Rx_Valid        : out   std_logic;
+        Rx_Data         : out   std_logic_vector(DataBits_g - 1 downto 0);
+        Rx_ParityError  : out   std_logic;
+        Uart_Tx         : out   std_logic;
+        Uart_Rx         : in    std_logic                                 := '1'
+    );
+end entity;
+
+architecture rtl of olo_intf_uart is
+
+    type StateTx_t is (Reset_s, Idle_s, Data_s, Stop_s);
+    type StateRx_t is (Idle_s, Start_s, Data_s, Parity_s, Stop_s);
+
+    function parityBit (Data : std_logic_vector) return std_logic is
+        variable Parity_v : std_logic := '0';
+    begin
+        if Parity_g = ""none"" then
+            return '0';
+        end if;
+
+        for i in Data'range loop
+            Parity_v := Parity_v xor Data(i);
+        end loop;
+
+        if Parity_g = ""even"" then
+            return Parity_v;
+        else
+            return not Parity_v;
+        end if;
+    end function;
+
+    function stopStrobeCount return natural is
+    begin
+        if StopBits_g = ""1"" then
+            return 2;
+        elsif StopBits_g = ""1.5"" then
+            return 3;
+        else
+            return 4;
+        end if;
+    end function;
+
+    function transmitBits return natural is
+        variable Bits_v : natural := DataBits_g;
+    begin
+        Bits_v := Bits_v + 1;
+        if Parity_g /= ""none"" then
+            Bits_v := Bits_v + 1;
+        end if;
+        return Bits_v;
+    end function;
+
+    type TwoProcess_r is record
+        StateTx        : StateTx_t;
+        TxCount        : natural range 0 to transmitBits*2 - 1;
+        Tx_Ready       : std_logic;
+        TxSync         : std_logic;
+        TxShiftReg     : std_logic_vector(DataBits_g+1 downto 0);
+        Uart_Tx        : std_logic;
+        StateRx        : StateRx_t;
+        RxCount        : natural range 0 to DataBits_g*2 - 1;
+        RxSync         : std_logic;
+        RxShiftReg     : std_logic_vector(DataBits_g-1 downto 0);
+        Rx_ParityError : std_logic;
+        Rx_Valid       : std_logic;
+    end record;
+
+    signal r, r_next : TwoProcess_r;
+
+    signal TxStrobe  : std_logic;
+    signal RxStrobe  : std_logic;
+    signal UartRxInt : std_logic;
+
+begin
+
+    assert BaudRate_g > 0.0
+        report ""olo_intf_uart - BaudRate_g must be greater than 0""
+        severity error;
+
+    assert StopBits_g = ""1"" or StopBits_g = ""1.5"" or StopBits_g = ""2""
+        report ""olo_intf_uart - StopBits_g must be 1, 1.5 or 2""
+        severity error;
+
+    assert Parity_g = ""none"" or Parity_g = ""even"" or Parity_g = ""odd""
+        report ""olo_intf_uart - Parity_g must be none, even or odd""
+        severity error;
+
+    assert BaudRate_g <= ClkFreq_g / 10.0
+        report ""olo_intf_uart - BaudRate_g must be <= ClkFreq_g / 10.0""
+        severity error;
+
+    p_comb : process (r, Tx_Valid, Tx_Data, UartRxInt, TxStrobe, RxStrobe) is
+        variable v : TwoProcess_r;
+    begin
+        v := r;
+
+        v.TxSync  := '0';
+        v.Uart_Tx := '1';
+
+        case r.StateTx is
+            when Reset_s =>
+                v.Tx_Ready := '1';
+                v.StateTx  := Idle_s;
+
+            when Idle_s =>
+                if r.Tx_Ready = '0' and TxStrobe = '1' then
+                    v.StateTx := Data_s;
+                    v.TxCount := 0;
+                elsif Tx_Valid = '1' and r.Tx_Ready = '1' then
+                    v.Tx_Ready   := '0';
+                    v.TxSync     := '1';
+                    v.TxShiftReg := parityBit(Tx_Data) & Tx_Data & '0';
+                end if;
+
+            when Data_s =>
+                v.Uart_Tx := r.TxShiftReg(0);
+                if TxStrobe = '1' then
+                    if r.TxCount = transmitBits*2 - 1 then
+                        v.TxCount := 0;
+                        v.StateTx := Stop_s;
+                    else
+                        if r.TxCount mod 2 = 1 then
+                            v.TxShiftReg := '0' & r.TxShiftReg(r.TxShiftReg'high downto 1);
+                        end if;
+                        v.TxCount := r.TxCount + 1;
+                    end if;
+                end if;
+
+            when Stop_s =>
+                v.Uart_Tx := '1';
+                if TxStrobe = '1' then
+                    if r.TxCount = stopStrobeCount-1 then
+                        v.StateTx  := Idle_s;
+                        v.Tx_Ready := '1';
+                    else
+                        v.TxCount := r.TxCount + 1;
+                    end if;
+                end if;
+
+            when others =>
+                null; -- unreachable code
+
+        end case;
+
+        v.RxSync   := '0';
+        v.Rx_Valid := '0';
+
+        case r.StateRx is
+            when Idle_s =>
+                v.Rx_ParityError := '0';
+                if UartRxInt = '0' then
+                    v.RxSync  := '1';
+                    v.StateRx := Start_s;
+                    v.RxCount := 0;
+                end if;
+
+            when Start_s =>
+                if RxStrobe = '1' then
+                    if r.RxCount = 2 then
+                        v.StateRx := Data_s;
+                        v.RxCount := 0;
+                    else
+                        if UartRxInt = '1' then
+                            v.StateRx := Idle_s;
+                        end if;
+                        v.RxCount := r.RxCount + 1;
+                    end if;
+                end if;
+
+            when Data_s =>
+                if RxStrobe = '1' then
+                    if r.RxCount mod 2 = 0 then
+                        v.RxShiftReg := UartRxInt & r.RxShiftReg(DataBits_g-1 downto 1);
+                    end if;
+                    if r.RxCount = DataBits_g*2 - 1 then
+                        if Parity_g = ""none"" then
+                            v.StateRx := Stop_s;
+                        else
+                            v.StateRx := Parity_s;
+                        end if;
+                        v.RxCount := 0;
+                    else
+                        v.RxCount := r.RxCount + 1;
+                    end if;
+                end if;
+
+            when Parity_s =>
+                if RxStrobe = '1' then
+                    if r.RxCount = 1 then
+                        v.StateRx := Stop_s;
+                    else
+                        v.RxCount := r.RxCount + 1;
+                        if UartRxInt /= parityBit(r.RxShiftReg) then
+                            v.Rx_ParityError := '1';
+                        end if;
+                    end if;
+                end if;
+
+            when Stop_s =>
+                if RxStrobe = '1' then
+                    v.StateRx  := Idle_s;
+                    v.Rx_Valid := '1';
+                end if;
+
+            when others =>
+                null; -- unreachable code
+
+        end case;
+
+        r_next <= v;
+    end process;
+
+    Tx_Ready       <= r.Tx_Ready;
+    Uart_Tx        <= r.Uart_Tx;
+    Rx_ParityError <= r.Rx_ParityError;
+    Rx_Data        <= r.RxShiftReg;
+    Rx_Valid       <= r.Rx_Valid;
+
+    p_seq : process (Clk) is
+    begin
+        if rising_edge(Clk) then
+            r <= r_next;
+            if Rst = '1' then
+                r.StateTx  <= Reset_s;
+                r.Tx_Ready <= '0';
+                r.StateRx <= Idle_s;
+            end if;
+        end if;
+    end process;
+
+    i_strb_tx : entity work.olo_base_strobe_gen
+        generic map (
+            FreqClkHz_g      => ClkFreq_g,
+            FractionalMode_g => true,
+            FreqStrobeHz_g   => BaudRate_g*2.0 -- 2x baud rate
+        )
+        port map (
+            Clk         => Clk,
+            Rst         => Rst,
+            In_Sync     => r.TxSync,
+            Out_Valid   => TxStrobe
+        );
+
+    i_strb_rx : entity work.olo_base_strobe_gen
+        generic map (
+            FreqClkHz_g      => ClkFreq_g,
+            FractionalMode_g => true,
+            FreqStrobeHz_g   => BaudRate_g*2.0 -- 2x baud rate
+        )
+        port map (
+            Clk         => Clk,
+            Rst         => Rst,
+            In_Sync     => r.RxSync,
+            Out_Valid   => RxStrobe
+        );
+
+    i_sync : entity work.olo_intf_sync
+        port map (
+            Clk             => Clk,
+            Rst             => Rst,
+            DataAsync(0)    => Uart_Rx,
+            DataSync(0)     => UartRxInt
+        );
+
+end architecture;"

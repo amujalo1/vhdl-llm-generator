@@ -1,0 +1,1237 @@
+"input","output"
+"Coprocessor  Part of the LXP32 test platform   Performs a simple arithmetic operation, uses interrupt to wake up the CPU.  Note: regardless of whether this description is synthesizable, it was designed exclusively for simulation purposes.","library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+
+entity coprocessor is
+	port(
+		clk_i: in std_logic;
+		rst_i: in std_logic;
+		
+		wbs_cyc_i: in std_logic;
+		wbs_stb_i: in std_logic;
+		wbs_we_i: in std_logic;
+		wbs_sel_i: in std_logic_vector(3 downto 0);
+		wbs_ack_o: out std_logic;
+		wbs_adr_i: in std_logic_vector(27 downto 2);
+		wbs_dat_i: in std_logic_vector(31 downto 0);
+		wbs_dat_o: out std_logic_vector(31 downto 0);
+		
+		irq_o: out std_logic
+	);
+end entity;
+
+architecture rtl of coprocessor is
+
+signal value: unsigned(31 downto 0):=(others=>'0');
+signal result: unsigned(31 downto 0):=(others=>'0');
+signal cnt: integer range 0 to 50:=0;
+signal irq: std_logic:='0';
+
+begin
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		if rst_i='1' then
+			value<=(others=>'0');
+			cnt<=0;
+			irq<='0';
+		else
+			if cnt>0 then
+				cnt<=cnt-1;
+			end if;
+			
+			if cnt=1 then
+				irq<='1';
+			else
+				irq<='0';
+			end if;
+			
+			if wbs_cyc_i='1' and wbs_stb_i='1' and wbs_we_i='1' then
+				for i in wbs_sel_i'range loop
+					if wbs_sel_i(i)='1' then
+						if wbs_adr_i=""00""&X""000000"" then
+							value(i*8+7 downto i*8)<=
+								unsigned(wbs_dat_i(i*8+7 downto i*8));
+							cnt<=50;
+						end if;
+					end if;
+				end loop;
+			end if;
+		end if;
+	end if;
+end process;
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		if rst_i='1' then
+			result<=(others=>'0');
+		else
+			result<=shift_left(value,1)+value;
+		end if;
+	end if;
+end process;
+
+wbs_ack_o<=wbs_cyc_i and wbs_stb_i;
+wbs_dat_o<=std_logic_vector(value) when wbs_adr_i=""00""&X""000000"" else
+	std_logic_vector(result) when wbs_adr_i=""00""&X""000001"" else
+	(others=>'-');
+
+irq_o<=irq;
+
+end architecture;"
+"DBUS monitor  Part of the LXP32 test platform   Monitors LXP32 data bus transactions, optionally throttles them.  Note: regardless of whether this description is synthesizable, it was designed exclusively for simulation purposes.","library ieee;
+use ieee.std_logic_1164.all;
+
+entity dbus_monitor is
+	generic(
+		THROTTLE: boolean
+	);
+	port(
+		clk_i: in std_logic;
+		rst_i: in std_logic;
+		
+		wbs_cyc_i: in std_logic;
+		wbs_stb_i: in std_logic;
+		wbs_we_i: in std_logic;
+		wbs_sel_i: in std_logic_vector(3 downto 0);
+		wbs_ack_o: out std_logic;
+		wbs_adr_i: in std_logic_vector(31 downto 2);
+		wbs_dat_i: in std_logic_vector(31 downto 0);
+		wbs_dat_o: out std_logic_vector(31 downto 0);
+		
+		wbm_cyc_o: out std_logic;
+		wbm_stb_o: out std_logic;
+		wbm_we_o: out std_logic;
+		wbm_sel_o: out std_logic_vector(3 downto 0);
+		wbm_ack_i: in std_logic;
+		wbm_adr_o: out std_logic_vector(31 downto 2);
+		wbm_dat_o: out std_logic_vector(31 downto 0);
+		wbm_dat_i: in std_logic_vector(31 downto 0)
+	);
+end entity;
+
+architecture rtl of dbus_monitor is
+
+signal prbs: std_logic;
+signal cycle: std_logic:='0';
+
+signal cyc_ff: std_logic:='0';
+signal ack_ff: std_logic:='0';
+
+begin
+
+
+gen_throttling: if THROTTLE generate
+	throttle_inst: entity work.scrambler(rtl)
+		generic map(TAP1=>6,TAP2=>7)
+		port map(clk_i=>clk_i,rst_i=>rst_i,ce_i=>'1',d_o=>prbs);
+end generate;
+
+gen_no_throttling: if not THROTTLE generate
+	prbs<='0';
+end generate;
+
+
+wbs_ack_o<=wbm_ack_i;
+wbs_dat_o<=wbm_dat_i when wbm_ack_i='1' else (others=>'-');
+
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		if rst_i='1' then
+			cycle<='0';
+		elsif prbs='0' and wbs_cyc_i='1' then
+			cycle<='1';
+		elsif wbs_cyc_i='0' then
+			cycle<='0';
+		end if;
+	end if;
+end process;
+
+wbm_cyc_o<=wbs_cyc_i and (not prbs or cycle);
+wbm_stb_o<=wbs_stb_i and (not prbs or cycle);
+wbm_we_o<=wbs_we_i;
+wbm_sel_o<=wbs_sel_i;
+wbm_adr_o<=wbs_adr_i;
+wbm_dat_o<=wbs_dat_i;
+
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		if rst_i='1' then
+			cyc_ff<='0';
+			ack_ff<='0';
+		else
+			cyc_ff<=wbs_cyc_i;
+			ack_ff<=wbm_ack_i;
+			
+			assert wbm_ack_i='0' or (wbs_cyc_i and (not prbs or cycle))='1'
+				report ""DBUS error: ACK asserted without CYC""
+				severity failure;
+			
+			assert not (wbs_cyc_i='0' and cyc_ff='1' and ack_ff/='1')
+				report ""DBUS error: cycle terminated prematurely""
+				severity failure;
+		end if;
+	end if;
+end process;
+
+end architecture;"
+"Generic FPGA memory block   Portable description of a dual-port memory block with one write port.  Parameters: * DATA_WIDTH:  data port width * ADDR_WIDTH:  address port width * SIZE:        memory size * MODE:        read/write synchronization mode for port A DONTCARE: choose the most efficient design WR_FIRST: feed written value to the output RD_FIRST: read old value NOCHANGE: don't change output during write","library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+
+entity generic_dpram is
+	generic(
+		DATA_WIDTH: integer;
+		ADDR_WIDTH: integer;
+		SIZE: integer;
+		MODE: string:=""DONTCARE""
+	);
+	port(
+		clka_i: in std_logic;
+		cea_i: in std_logic;
+		wea_i: in std_logic;
+		addra_i: in std_logic_vector(ADDR_WIDTH-1 downto 0);
+		da_i: in std_logic_vector(DATA_WIDTH-1 downto 0);
+		da_o: out std_logic_vector(DATA_WIDTH-1 downto 0);
+		
+		clkb_i: in std_logic;
+		ceb_i: in std_logic;
+		addrb_i: in std_logic_vector(ADDR_WIDTH-1 downto 0);
+		db_o: out std_logic_vector(DATA_WIDTH-1 downto 0)
+	);
+end entity;
+
+architecture rtl of generic_dpram is
+
+type ram_type is array(SIZE-1 downto 0) of std_logic_vector(DATA_WIDTH-1 downto 0);
+signal ram: ram_type;
+
+attribute syn_ramstyle: string;
+attribute syn_ramstyle of ram: signal is ""no_rw_check"";
+attribute ram_style: string; -- for Xilinx
+attribute ram_style of ram: signal is ""block"";
+
+begin
+
+
+assert SIZE<=2**ADDR_WIDTH
+	report ""SIZE must be less or equal than 2^ADDR_WIDTH""
+	severity failure;
+
+assert MODE=""DONTCARE"" or MODE=""WR_FIRST"" or MODE=""RD_FIRST"" or MODE=""NOCHANGE""
+	report ""Unrecognized MODE value (DONTCARE, WR_FIRST, RD_FIRST or NOCHANGE expected)""
+	severity failure;
+
+
+port_a_dont_care_gen: if MODE=""DONTCARE"" generate
+	process (clka_i) is
+	begin
+		if rising_edge(clka_i) then
+			if cea_i='1' then
+				if wea_i='1' then
+					ram(to_integer(unsigned(addra_i)))<=da_i;
+					da_o<=(others=>'-');
+				else
+					if is_x(addra_i) then
+						da_o<=(others=>'X');
+					else
+						da_o<=ram(to_integer(unsigned(addra_i)));
+					end if;
+				end if;
+			end if;
+		end if;
+	end process;
+end generate;
+
+port_a_write_first_gen: if MODE=""WR_FIRST"" generate
+	process (clka_i) is
+	begin
+		if rising_edge(clka_i) then
+			if cea_i='1' then
+				if wea_i='1' then
+					ram(to_integer(unsigned(addra_i)))<=da_i;
+					da_o<=da_i;
+				else
+					if is_x(addra_i) then
+						da_o<=(others=>'X');
+					else
+						da_o<=ram(to_integer(unsigned(addra_i)));
+					end if;
+				end if;
+			end if;
+		end if;
+	end process;
+end generate;
+
+port_a_read_first_gen: if MODE=""RD_FIRST"" generate
+	process (clka_i) is
+	begin
+		if rising_edge(clka_i) then
+			if cea_i='1' then
+				if wea_i='1' then
+					ram(to_integer(unsigned(addra_i)))<=da_i;
+				end if;
+				if is_x(addra_i) then
+					da_o<=(others=>'X');
+				else
+					da_o<=ram(to_integer(unsigned(addra_i)));
+				end if;
+			end if;
+		end if;
+	end process;
+end generate;
+
+port_a_no_change_gen: if MODE=""NOCHANGE"" generate
+	process (clka_i) is
+	begin
+		if rising_edge(clka_i) then
+			if cea_i='1' then
+				if wea_i='1' then
+					ram(to_integer(unsigned(addra_i)))<=da_i;
+				else
+					if is_x(addra_i) then
+						da_o<=(others=>'X');
+					else
+						da_o<=ram(to_integer(unsigned(addra_i)));
+					end if;
+				end if;
+			end if;
+		end if;
+	end process;
+end generate;
+
+
+process (clkb_i) is
+begin
+	if rising_edge(clkb_i) then
+		if ceb_i='1' then
+			if is_x(addrb_i) then
+				db_o<=(others=>'X');
+			else
+				db_o<=ram(to_integer(unsigned(addrb_i)));
+			end if;
+		end if;
+	end if;
+end process;
+
+end architecture;"
+"IBUS adapter  Part of the LXP32 test platform   Converts the Low Latency Interface to WISHBONE registered feedback protocol.  Note: regardless of whether this description is synthesizable, it was designed exclusively for simulation purposes.","library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+
+entity ibus_adapter is
+	port(
+		clk_i: in std_logic;
+		rst_i: in std_logic;
+		
+		ibus_cyc_i: in std_logic;
+		ibus_stb_i: in std_logic;
+		ibus_cti_i: in std_logic_vector(2 downto 0);
+		ibus_bte_i: in std_logic_vector(1 downto 0);
+		ibus_ack_o: out std_logic;
+		ibus_adr_i: in std_logic_vector(29 downto 0);
+		ibus_dat_o: out std_logic_vector(31 downto 0);
+		
+		lli_re_o: out std_logic;
+		lli_adr_o: out std_logic_vector(29 downto 0);
+		lli_dat_i: in std_logic_vector(31 downto 0);
+		lli_busy_i: in std_logic
+	);
+end entity;
+
+architecture rtl of ibus_adapter is
+
+constant burst_delay: integer:=5;
+signal burst_delay_cnt: integer:=0;
+signal delay_burst: std_logic;
+
+signal re: std_logic;
+signal requested: std_logic:='0';
+signal adr: unsigned(29 downto 0);
+signal ack: std_logic;
+
+begin
+
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		if rst_i='1' then
+			burst_delay_cnt<=0;
+		elsif ibus_cyc_i='0' then
+			burst_delay_cnt<=burst_delay;
+		elsif burst_delay_cnt/=0 then
+			burst_delay_cnt<=burst_delay_cnt-1;
+		end if;
+	end if;
+end process;
+
+delay_burst<='1' when burst_delay_cnt/=0 else '0';
+
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		if rst_i='1' then
+			requested<='0';
+		elsif lli_busy_i='0' then
+			requested<=re;
+		end if;
+	end if;
+end process;
+
+ack<=requested and not lli_busy_i;
+
+
+re<=(ibus_cyc_i and ibus_stb_i and not delay_burst) when ack='0' or
+	(ibus_cti_i=""010"" and ibus_bte_i=""00"") else '0';
+
+adr<=unsigned(ibus_adr_i) when re='1' and ack='0' else
+	unsigned(ibus_adr_i)+1 when re='1' and ack='1' else
+	(others=>'-');
+
+lli_re_o<=re;
+lli_adr_o<=std_logic_vector(adr);
+
+
+ibus_ack_o<=ack;
+ibus_dat_o<=lli_dat_i when ack='1' else (others=>'-');
+
+end architecture;"
+"Simple WISHBONE interconnect  Generated by wigen at Sat Nov  2 11:45:49 2024  Configuration: Number of masters:     2 Number of slaves:      5 Master address width:  32 Slave address width:   28 Port size:             32 Port granularity:      8 Entity name:           intercon Pipelined arbiter:     no Registered feedback:   no Unsafe slave decoder:  no  Command line: wigen -e intercon 2 5 32 28 32 8","library ieee;
+use ieee.std_logic_1164.all;
+
+entity intercon is
+	port(
+		clk_i: in std_logic;
+		rst_i: in std_logic;
+
+		s0_cyc_i: in std_logic;
+		s0_stb_i: in std_logic;
+		s0_we_i: in std_logic;
+		s0_sel_i: in std_logic_vector(3 downto 0);
+		s0_ack_o: out std_logic;
+		s0_adr_i: in std_logic_vector(31 downto 2);
+		s0_dat_i: in std_logic_vector(31 downto 0);
+		s0_dat_o: out std_logic_vector(31 downto 0);
+
+		s1_cyc_i: in std_logic;
+		s1_stb_i: in std_logic;
+		s1_we_i: in std_logic;
+		s1_sel_i: in std_logic_vector(3 downto 0);
+		s1_ack_o: out std_logic;
+		s1_adr_i: in std_logic_vector(31 downto 2);
+		s1_dat_i: in std_logic_vector(31 downto 0);
+		s1_dat_o: out std_logic_vector(31 downto 0);
+
+		m0_cyc_o: out std_logic;
+		m0_stb_o: out std_logic;
+		m0_we_o: out std_logic;
+		m0_sel_o: out std_logic_vector(3 downto 0);
+		m0_ack_i: in std_logic;
+		m0_adr_o: out std_logic_vector(27 downto 2);
+		m0_dat_o: out std_logic_vector(31 downto 0);
+		m0_dat_i: in std_logic_vector(31 downto 0);
+
+		m1_cyc_o: out std_logic;
+		m1_stb_o: out std_logic;
+		m1_we_o: out std_logic;
+		m1_sel_o: out std_logic_vector(3 downto 0);
+		m1_ack_i: in std_logic;
+		m1_adr_o: out std_logic_vector(27 downto 2);
+		m1_dat_o: out std_logic_vector(31 downto 0);
+		m1_dat_i: in std_logic_vector(31 downto 0);
+
+		m2_cyc_o: out std_logic;
+		m2_stb_o: out std_logic;
+		m2_we_o: out std_logic;
+		m2_sel_o: out std_logic_vector(3 downto 0);
+		m2_ack_i: in std_logic;
+		m2_adr_o: out std_logic_vector(27 downto 2);
+		m2_dat_o: out std_logic_vector(31 downto 0);
+		m2_dat_i: in std_logic_vector(31 downto 0);
+
+		m3_cyc_o: out std_logic;
+		m3_stb_o: out std_logic;
+		m3_we_o: out std_logic;
+		m3_sel_o: out std_logic_vector(3 downto 0);
+		m3_ack_i: in std_logic;
+		m3_adr_o: out std_logic_vector(27 downto 2);
+		m3_dat_o: out std_logic_vector(31 downto 0);
+		m3_dat_i: in std_logic_vector(31 downto 0);
+
+		m4_cyc_o: out std_logic;
+		m4_stb_o: out std_logic;
+		m4_we_o: out std_logic;
+		m4_sel_o: out std_logic_vector(3 downto 0);
+		m4_ack_i: in std_logic;
+		m4_adr_o: out std_logic_vector(27 downto 2);
+		m4_dat_o: out std_logic_vector(31 downto 0);
+		m4_dat_i: in std_logic_vector(31 downto 0)
+	);
+end entity;
+
+architecture rtl of intercon is
+
+signal request: std_logic_vector(1 downto 0);
+signal grant_next: std_logic_vector(1 downto 0);
+signal grant: std_logic_vector(1 downto 0);
+signal grant_reg: std_logic_vector(1 downto 0):=(others=>'0');
+
+signal select_slave: std_logic_vector(5 downto 0);
+
+signal cyc_mux: std_logic;
+signal stb_mux: std_logic;
+signal we_mux: std_logic;
+signal sel_mux: std_logic_vector(3 downto 0);
+signal adr_mux: std_logic_vector(31 downto 2);
+signal wdata_mux: std_logic_vector(31 downto 0);
+
+signal ack_mux: std_logic;
+signal rdata_mux: std_logic_vector(31 downto 0);
+
+begin
+
+
+request<=s1_cyc_i&s0_cyc_i;
+
+grant_next<=""01"" when request(0)='1' else
+	""10"" when request(1)='1' else
+	(others=>'0');
+
+grant<=grant_reg when (request and grant_reg)/=""00"" else grant_next;
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		if rst_i='1' then
+			grant_reg<=(others=>'0');
+		else
+			grant_reg<=grant;
+		end if;
+	end if;
+end process;
+
+
+cyc_mux<=(s0_cyc_i and grant(0)) or
+	(s1_cyc_i and grant(1));
+
+stb_mux<=(s0_stb_i and grant(0)) or
+	(s1_stb_i and grant(1));
+
+we_mux<=(s0_we_i and grant(0)) or
+	(s1_we_i and grant(1));
+
+sel_mux_gen: for i in sel_mux'range generate
+	sel_mux(i)<=(s0_sel_i(i) and grant(0)) or
+		(s1_sel_i(i) and grant(1));
+end generate;
+
+adr_mux_gen: for i in adr_mux'range generate
+	adr_mux(i)<=(s0_adr_i(i) and grant(0)) or
+		(s1_adr_i(i) and grant(1));
+end generate;
+
+wdata_mux_gen: for i in wdata_mux'range generate
+	wdata_mux(i)<=(s0_dat_i(i) and grant(0)) or
+		(s1_dat_i(i) and grant(1));
+end generate;
+
+
+select_slave<=""000001"" when adr_mux(31 downto 28)=""0000"" else
+	""000010"" when adr_mux(31 downto 28)=""0001"" else
+	""000100"" when adr_mux(31 downto 28)=""0010"" else
+	""001000"" when adr_mux(31 downto 28)=""0011"" else
+	""010000"" when adr_mux(31 downto 28)=""0100"" else
+	""100000""; -- fallback slave
+
+m0_cyc_o<=cyc_mux and select_slave(0);
+m0_stb_o<=stb_mux and select_slave(0);
+m0_we_o<=we_mux;
+m0_sel_o<=sel_mux;
+m0_adr_o<=adr_mux(m0_adr_o'range);
+m0_dat_o<=wdata_mux;
+
+m1_cyc_o<=cyc_mux and select_slave(1);
+m1_stb_o<=stb_mux and select_slave(1);
+m1_we_o<=we_mux;
+m1_sel_o<=sel_mux;
+m1_adr_o<=adr_mux(m1_adr_o'range);
+m1_dat_o<=wdata_mux;
+
+m2_cyc_o<=cyc_mux and select_slave(2);
+m2_stb_o<=stb_mux and select_slave(2);
+m2_we_o<=we_mux;
+m2_sel_o<=sel_mux;
+m2_adr_o<=adr_mux(m2_adr_o'range);
+m2_dat_o<=wdata_mux;
+
+m3_cyc_o<=cyc_mux and select_slave(3);
+m3_stb_o<=stb_mux and select_slave(3);
+m3_we_o<=we_mux;
+m3_sel_o<=sel_mux;
+m3_adr_o<=adr_mux(m3_adr_o'range);
+m3_dat_o<=wdata_mux;
+
+m4_cyc_o<=cyc_mux and select_slave(4);
+m4_stb_o<=stb_mux and select_slave(4);
+m4_we_o<=we_mux;
+m4_sel_o<=sel_mux;
+m4_adr_o<=adr_mux(m4_adr_o'range);
+m4_dat_o<=wdata_mux;
+
+
+ack_mux<=(m0_ack_i and select_slave(0)) or
+	(m1_ack_i and select_slave(1)) or
+	(m2_ack_i and select_slave(2)) or
+	(m3_ack_i and select_slave(3)) or
+	(m4_ack_i and select_slave(4)) or
+	(cyc_mux and stb_mux and select_slave(5)); -- fallback slave
+
+rdata_mux_gen: for i in rdata_mux'range generate
+	rdata_mux(i)<=(m0_dat_i(i) and select_slave(0)) or
+		(m1_dat_i(i) and select_slave(1)) or
+		(m2_dat_i(i) and select_slave(2)) or
+		(m3_dat_i(i) and select_slave(3)) or
+		(m4_dat_i(i) and select_slave(4));
+end generate;
+
+
+s0_ack_o<=ack_mux and grant(0);
+s0_dat_o<=rdata_mux;
+
+s1_ack_o<=ack_mux and grant(1);
+s1_dat_o<=rdata_mux;
+
+end architecture;"
+"LXP32 platform top-level design unit  Part of the LXP32 test platform   A SoC-like simulation platform for the LXP32 CPU, containing a few peripherals such as program RAM, timer and coprocessor.  Note: regardless of whether this description is synthesizable, it was designed exclusively for simulation purposes.","library ieee;
+use ieee.std_logic_1164.all;
+
+entity platform is
+	generic(
+		CPU_DBUS_RMW: boolean;
+		CPU_MUL_ARCH: string;
+		MODEL_LXP32C: boolean;
+		THROTTLE_DBUS: boolean;
+		THROTTLE_IBUS: boolean
+	);
+	port(
+		clk_i: in std_logic;
+		rst_i: in std_logic;
+		cpu_rst_i: in std_logic;
+		
+		wbm_cyc_o: out std_logic;
+		wbm_stb_o: out std_logic;
+		wbm_we_o: out std_logic;
+		wbm_sel_o: out std_logic_vector(3 downto 0);
+		wbm_ack_i: in std_logic;
+		wbm_adr_o: out std_logic_vector(27 downto 2);
+		wbm_dat_o: out std_logic_vector(31 downto 0);
+		wbm_dat_i: in std_logic_vector(31 downto 0);
+		
+		wbs_cyc_i: in std_logic;
+		wbs_stb_i: in std_logic;
+		wbs_we_i: in std_logic;
+		wbs_sel_i: in std_logic_vector(3 downto 0);
+		wbs_ack_o: out std_logic;
+		wbs_adr_i: in std_logic_vector(31 downto 2);
+		wbs_dat_i: in std_logic_vector(31 downto 0);
+		wbs_dat_o: out std_logic_vector(31 downto 0);
+		
+		gp_io: inout std_logic_vector(31 downto 0)
+	);
+end entity;
+
+architecture rtl of platform is
+
+type wbm_type is record
+	cyc: std_logic;
+	stb: std_logic;
+	we: std_logic;
+	sel: std_logic_vector(3 downto 0);
+	ack: std_logic;
+	adr: std_logic_vector(31 downto 2);
+	wdata: std_logic_vector(31 downto 0);
+	rdata: std_logic_vector(31 downto 0);
+end record;
+
+type wbs_type is record
+	cyc: std_logic;
+	stb: std_logic;
+	we: std_logic;
+	sel: std_logic_vector(3 downto 0);
+	ack: std_logic;
+	adr: std_logic_vector(27 downto 2);
+	wdata: std_logic_vector(31 downto 0);
+	rdata: std_logic_vector(31 downto 0);
+end record;
+
+type ibus_type is record
+	cyc: std_logic;
+	stb: std_logic;
+	cti: std_logic_vector(2 downto 0);
+	bte: std_logic_vector(1 downto 0);
+	ack: std_logic;
+	adr: std_logic_vector(29 downto 0);
+	dat: std_logic_vector(31 downto 0);
+end record;
+
+signal cpu_rst: std_logic;
+signal cpu_irq: std_logic_vector(7 downto 0);
+signal cpu_dbus: wbm_type;
+signal cpu_ibus: ibus_type;
+
+signal lli_re: std_logic;
+signal lli_adr: std_logic_vector(29 downto 0);
+signal lli_dat: std_logic_vector(31 downto 0);
+signal lli_busy: std_logic;
+
+signal monitor_dbus: wbm_type;
+
+signal ram_wb: wbs_type;
+
+signal timer_wb: wbs_type;
+signal timer_elapsed: std_logic;
+
+signal coprocessor_wb: wbs_type;
+signal coprocessor_irq: std_logic;
+
+signal timer2_wb: wbs_type;
+signal timer2_irq: std_logic;
+
+begin
+
+
+intercon_inst: entity work.intercon(rtl)
+	port map(
+		clk_i=>clk_i,
+		rst_i=>rst_i,
+
+		s0_cyc_i=>wbs_cyc_i,
+		s0_stb_i=>wbs_stb_i,
+		s0_we_i=>wbs_we_i,
+		s0_sel_i=>wbs_sel_i,
+		s0_ack_o=>wbs_ack_o,
+		s0_adr_i=>wbs_adr_i,
+		s0_dat_i=>wbs_dat_i,
+		s0_dat_o=>wbs_dat_o,
+
+		s1_cyc_i=>monitor_dbus.cyc,
+		s1_stb_i=>monitor_dbus.stb,
+		s1_we_i=>monitor_dbus.we,
+		s1_sel_i=>monitor_dbus.sel,
+		s1_ack_o=>monitor_dbus.ack,
+		s1_adr_i=>monitor_dbus.adr,
+		s1_dat_i=>monitor_dbus.wdata,
+		s1_dat_o=>monitor_dbus.rdata,
+
+		m0_cyc_o=>ram_wb.cyc,
+		m0_stb_o=>ram_wb.stb,
+		m0_we_o=>ram_wb.we,
+		m0_sel_o=>ram_wb.sel,
+		m0_ack_i=>ram_wb.ack,
+		m0_adr_o=>ram_wb.adr,
+		m0_dat_o=>ram_wb.wdata,
+		m0_dat_i=>ram_wb.rdata,
+
+		m1_cyc_o=>wbm_cyc_o,
+		m1_stb_o=>wbm_stb_o,
+		m1_we_o=>wbm_we_o,
+		m1_sel_o=>wbm_sel_o,
+		m1_ack_i=>wbm_ack_i,
+		m1_adr_o=>wbm_adr_o,
+		m1_dat_o=>wbm_dat_o,
+		m1_dat_i=>wbm_dat_i,
+		
+		m2_cyc_o=>timer_wb.cyc,
+		m2_stb_o=>timer_wb.stb,
+		m2_we_o=>timer_wb.we,
+		m2_sel_o=>timer_wb.sel,
+		m2_ack_i=>timer_wb.ack,
+		m2_adr_o=>timer_wb.adr,
+		m2_dat_o=>timer_wb.wdata,
+		m2_dat_i=>timer_wb.rdata,
+		
+		m3_cyc_o=>coprocessor_wb.cyc,
+		m3_stb_o=>coprocessor_wb.stb,
+		m3_we_o=>coprocessor_wb.we,
+		m3_sel_o=>coprocessor_wb.sel,
+		m3_ack_i=>coprocessor_wb.ack,
+		m3_adr_o=>coprocessor_wb.adr,
+		m3_dat_o=>coprocessor_wb.wdata,
+		m3_dat_i=>coprocessor_wb.rdata,
+
+		m4_cyc_o=>timer2_wb.cyc,
+		m4_stb_o=>timer2_wb.stb,
+		m4_we_o=>timer2_wb.we,
+		m4_sel_o=>timer2_wb.sel,
+		m4_ack_i=>timer2_wb.ack,
+		m4_adr_o=>timer2_wb.adr,
+		m4_dat_o=>timer2_wb.wdata,
+		m4_dat_i=>timer2_wb.rdata
+	);
+
+
+cpu_rst<=cpu_rst_i or rst_i;
+
+
+cpu_irq<=""0000""&timer2_irq&coprocessor_irq&timer_elapsed&timer_elapsed;
+
+gen_lxp32u: if not MODEL_LXP32C generate
+	lxp32u_top_inst: entity work.lxp32u_top(rtl)
+		generic map(
+			DBUS_RMW=>CPU_DBUS_RMW,
+			DIVIDER_EN=>true,
+			MUL_ARCH=>CPU_MUL_ARCH,
+			START_ADDR=>(others=>'0')
+		)
+		port map(
+			clk_i=>clk_i,
+			rst_i=>cpu_rst,
+			
+			lli_re_o=>lli_re,
+			lli_adr_o=>lli_adr,
+			lli_dat_i=>lli_dat,
+			lli_busy_i=>lli_busy,
+			
+			dbus_cyc_o=>cpu_dbus.cyc,
+			dbus_stb_o=>cpu_dbus.stb,
+			dbus_we_o=>cpu_dbus.we,
+			dbus_sel_o=>cpu_dbus.sel,
+			dbus_ack_i=>cpu_dbus.ack,
+			dbus_adr_o=>cpu_dbus.adr,
+			dbus_dat_o=>cpu_dbus.wdata,
+			dbus_dat_i=>cpu_dbus.rdata,
+			
+			irq_i=>cpu_irq
+		);
+end generate;
+
+gen_lxp32c: if MODEL_LXP32C generate
+	lxp32c_top_inst: entity work.lxp32c_top(rtl)
+		generic map(
+			DBUS_RMW=>CPU_DBUS_RMW,
+			DIVIDER_EN=>true,
+			IBUS_BURST_SIZE=>16,
+			IBUS_PREFETCH_SIZE=>32,
+			MUL_ARCH=>CPU_MUL_ARCH,
+			START_ADDR=>(others=>'0')
+		)
+		port map(
+			clk_i=>clk_i,
+			rst_i=>cpu_rst,
+			
+			ibus_cyc_o=>cpu_ibus.cyc,
+			ibus_stb_o=>cpu_ibus.stb,
+			ibus_cti_o=>cpu_ibus.cti,
+			ibus_bte_o=>cpu_ibus.bte,
+			ibus_ack_i=>cpu_ibus.ack,
+			ibus_adr_o=>cpu_ibus.adr,
+			ibus_dat_i=>cpu_ibus.dat,
+			
+			dbus_cyc_o=>cpu_dbus.cyc,
+			dbus_stb_o=>cpu_dbus.stb,
+			dbus_we_o=>cpu_dbus.we,
+			dbus_sel_o=>cpu_dbus.sel,
+			dbus_ack_i=>cpu_dbus.ack,
+			dbus_adr_o=>cpu_dbus.adr,
+			dbus_dat_o=>cpu_dbus.wdata,
+			dbus_dat_i=>cpu_dbus.rdata,
+			
+			irq_i=>cpu_irq
+		);
+	
+	ibus_adapter_inst: entity work.ibus_adapter(rtl)
+		port map(
+			clk_i=>clk_i,
+			rst_i=>rst_i,
+			
+			ibus_cyc_i=>cpu_ibus.cyc,
+			ibus_stb_i=>cpu_ibus.stb,
+			ibus_cti_i=>cpu_ibus.cti,
+			ibus_bte_i=>cpu_ibus.bte,
+			ibus_ack_o=>cpu_ibus.ack,
+			ibus_adr_i=>cpu_ibus.adr,
+			ibus_dat_o=>cpu_ibus.dat,
+			
+			lli_re_o=>lli_re,
+			lli_adr_o=>lli_adr,
+			lli_dat_i=>lli_dat,
+			lli_busy_i=>lli_busy
+		);
+end generate;
+
+
+dbus_monitor_inst: entity work.dbus_monitor(rtl)
+	generic map(
+		THROTTLE=>THROTTLE_DBUS
+	)
+	port map(
+		clk_i=>clk_i,
+		rst_i=>rst_i,
+		
+		wbs_cyc_i=>cpu_dbus.cyc,
+		wbs_stb_i=>cpu_dbus.stb,
+		wbs_we_i=>cpu_dbus.we,
+		wbs_sel_i=>cpu_dbus.sel,
+		wbs_ack_o=>cpu_dbus.ack,
+		wbs_adr_i=>cpu_dbus.adr,
+		wbs_dat_i=>cpu_dbus.wdata,
+		wbs_dat_o=>cpu_dbus.rdata,
+		
+		wbm_cyc_o=>monitor_dbus.cyc,
+		wbm_stb_o=>monitor_dbus.stb,
+		wbm_we_o=>monitor_dbus.we,
+		wbm_sel_o=>monitor_dbus.sel,
+		wbm_ack_i=>monitor_dbus.ack,
+		wbm_adr_o=>monitor_dbus.adr,
+		wbm_dat_o=>monitor_dbus.wdata,
+		wbm_dat_i=>monitor_dbus.rdata
+	);
+
+
+program_ram_inst: entity work.program_ram(rtl)
+	generic map(
+		THROTTLE=>THROTTLE_IBUS
+	)
+	port map(
+		clk_i=>clk_i,
+		rst_i=>rst_i,
+		
+		wbs_cyc_i=>ram_wb.cyc,
+		wbs_stb_i=>ram_wb.stb,
+		wbs_we_i=>ram_wb.we,
+		wbs_sel_i=>ram_wb.sel,
+		wbs_ack_o=>ram_wb.ack,
+		wbs_adr_i=>ram_wb.adr,
+		wbs_dat_i=>ram_wb.wdata,
+		wbs_dat_o=>ram_wb.rdata,
+		
+		lli_re_i=>lli_re,
+		lli_adr_i=>lli_adr,
+		lli_dat_o=>lli_dat,
+		lli_busy_o=>lli_busy
+	);
+
+
+timer_inst: entity work.timer(rtl)
+	port map(
+		clk_i=>clk_i,
+		rst_i=>rst_i,
+		
+		wbs_cyc_i=>timer_wb.cyc,
+		wbs_stb_i=>timer_wb.stb,
+		wbs_we_i=>timer_wb.we,
+		wbs_sel_i=>timer_wb.sel,
+		wbs_ack_o=>timer_wb.ack,
+		wbs_adr_i=>timer_wb.adr,
+		wbs_dat_i=>timer_wb.wdata,
+		wbs_dat_o=>timer_wb.rdata,
+		
+		elapsed_o=>timer_elapsed
+	);
+
+
+timer2_inst: entity work.timer(rtl)
+	port map(
+		clk_i=>clk_i,
+		rst_i=>rst_i,
+
+		wbs_cyc_i=>timer2_wb.cyc,
+		wbs_stb_i=>timer2_wb.stb,
+		wbs_we_i=>timer2_wb.we,
+		wbs_sel_i=>timer2_wb.sel,
+		wbs_ack_o=>timer2_wb.ack,
+		wbs_adr_i=>timer2_wb.adr,
+		wbs_dat_i=>timer2_wb.wdata,
+		wbs_dat_o=>timer2_wb.rdata,
+
+		elapsed_o=>timer2_irq
+	);
+
+
+coprocessor_inst: entity work.coprocessor(rtl)
+	port map(
+		clk_i=>clk_i,
+		rst_i=>rst_i,
+		
+		wbs_cyc_i=>coprocessor_wb.cyc,
+		wbs_stb_i=>coprocessor_wb.stb,
+		wbs_we_i=>coprocessor_wb.we,
+		wbs_sel_i=>coprocessor_wb.sel,
+		wbs_ack_o=>coprocessor_wb.ack,
+		wbs_adr_i=>coprocessor_wb.adr,
+		wbs_dat_i=>coprocessor_wb.wdata,
+		wbs_dat_o=>coprocessor_wb.rdata,
+		
+		irq_o=>coprocessor_irq
+	);
+
+end architecture;"
+"Program RAM  Part of the LXP32 test platform   Program RAM for the LXP32 test platform. Has two interfaces: WISHBONE (for data access) and LLI (for LXP32 instruction bus). Optionally performs throttling.  Note: regardless of whether this description is synthesizable, it was designed exclusively for simulation purposes.","library ieee;
+use ieee.std_logic_1164.all;
+
+use work.common_pkg.all;
+
+entity program_ram is
+	generic(
+		THROTTLE: boolean
+	);
+	port(
+		clk_i: in std_logic;
+		rst_i: in std_logic;
+		
+		wbs_cyc_i: in std_logic;
+		wbs_stb_i: in std_logic;
+		wbs_we_i: in std_logic;
+		wbs_sel_i: in std_logic_vector(3 downto 0);
+		wbs_ack_o: out std_logic;
+		wbs_adr_i: in std_logic_vector(27 downto 2);
+		wbs_dat_i: in std_logic_vector(31 downto 0);
+		wbs_dat_o: out std_logic_vector(31 downto 0);
+		
+		lli_re_i: in std_logic;
+		lli_adr_i: in std_logic_vector(29 downto 0);
+		lli_dat_o: out std_logic_vector(31 downto 0);
+		lli_busy_o: out std_logic
+	);
+end entity;
+
+architecture rtl of program_ram is
+
+signal ram_a_we: std_logic_vector(3 downto 0);
+signal ram_a_rdata: std_logic_vector(31 downto 0);
+
+signal ram_b_re: std_logic;
+signal ram_b_rdata: std_logic_vector(31 downto 0);
+
+signal ack_write: std_logic;
+signal ack_read: std_logic;
+
+signal prbs: std_logic;
+signal lli_busy: std_logic:='0';
+
+begin
+
+
+gen_dprams: for i in 3 downto 0 generate
+	generic_dpram_inst: entity work.generic_dpram(rtl)
+		generic map(
+			DATA_WIDTH=>8,
+			ADDR_WIDTH=>14,
+			SIZE=>16384,
+			MODE=>""DONTCARE""
+		)
+		port map(
+			clka_i=>clk_i,
+			cea_i=>'1',
+			wea_i=>ram_a_we(i),
+			addra_i=>wbs_adr_i(15 downto 2),
+			da_i=>wbs_dat_i(i*8+7 downto i*8),
+			da_o=>ram_a_rdata(i*8+7 downto i*8),
+			
+			clkb_i=>clk_i,
+			ceb_i=>ram_b_re,
+			addrb_i=>lli_adr_i(13 downto 0),
+			db_o=>ram_b_rdata(i*8+7 downto i*8)
+		);
+end generate;
+
+
+gen_ram_a_we: for i in 3 downto 0 generate
+	ram_a_we(i)<='1' when wbs_cyc_i='1' and wbs_stb_i='1' and wbs_we_i='1'
+		and wbs_sel_i(i)='1' and wbs_adr_i(27 downto 16)=""000000000000"" else '0';
+end generate;
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		ack_read<=wbs_cyc_i and wbs_stb_i and not wbs_we_i and not ack_read;
+	end if;
+end process;
+
+ack_write<=wbs_cyc_i and wbs_stb_i and wbs_we_i;
+
+wbs_ack_o<=ack_read or ack_write;
+wbs_dat_o<=ram_a_rdata;
+
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		assert lli_re_i='0' or lli_adr_i(lli_adr_i'high downto 14)=X""0000""
+			report ""Attempted to fetch instruction from a non-existent address 0x""&
+				hex_string(lli_adr_i&""00"")
+			severity failure;
+	end if;
+end process;
+
+gen_throttling: if THROTTLE generate
+	throttle_inst: entity work.scrambler(rtl)
+		generic map(TAP1=>9,TAP2=>11)
+		port map(clk_i=>clk_i,rst_i=>rst_i,ce_i=>'1',d_o=>prbs);
+end generate;
+
+gen_no_throttling: if not THROTTLE generate
+	prbs<='0';
+end generate;
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		if rst_i='1' then
+			lli_busy<='0';
+		elsif prbs='1' and lli_re_i='1' then
+			lli_busy<='1';
+		elsif prbs='0' then
+			lli_busy<='0';
+		end if;
+	end if;
+end process;
+
+ram_b_re<=lli_re_i and not lli_busy;
+
+lli_busy_o<=lli_busy;
+lli_dat_o<=ram_b_rdata when lli_busy='0' else (others=>'-');
+
+end architecture;"
+"Scrambler  Part of the LXP32 test platform   Generates a pseudo-random binary sequence using a Linear-Feedback Shift Register (LFSR).  In order to generate a maximum-length sequence, 1+x^TAP1+x^TAP2 must be a primitive polynomial. Typical polynomials include: (6,7), (9,11), (14,15).  Note: regardless of whether this description is synthesizable, it was designed exclusively for simulation purposes.","library ieee;
+use ieee.std_logic_1164.all;
+
+entity scrambler is
+	generic(
+		TAP1: integer;
+		TAP2: integer
+	);
+	port(
+		clk_i: in std_logic;
+		rst_i: in std_logic;
+		ce_i: in std_logic;
+		d_o: out std_logic
+	);
+end entity;
+
+architecture rtl of scrambler is
+
+signal reg: std_logic_vector(TAP2 downto 1):=(others=>'1');
+
+begin
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		if rst_i='1' then
+			reg<=(others=>'1');
+		elsif ce_i='1' then
+			reg<=reg(TAP2-1 downto 1)&(reg(TAP2) xor reg(TAP1));
+		end if;
+	end if;
+end process;
+
+d_o<=reg(1);
+
+end architecture;"
+"Timer  Part of the LXP32 test platform   A simple programmable interval timer.  Note: regardless of whether this description is synthesizable, it was designed exclusively for simulation purposes.","library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+
+entity timer is
+	port(
+		clk_i: in std_logic;
+		rst_i: in std_logic;
+		
+		wbs_cyc_i: in std_logic;
+		wbs_stb_i: in std_logic;
+		wbs_we_i: in std_logic;
+		wbs_sel_i: in std_logic_vector(3 downto 0);
+		wbs_ack_o: out std_logic;
+		wbs_adr_i: in std_logic_vector(27 downto 2);
+		wbs_dat_i: in std_logic_vector(31 downto 0);
+		wbs_dat_o: out std_logic_vector(31 downto 0);
+		
+		elapsed_o: out std_logic
+	);
+end entity;
+
+architecture rtl of timer is
+
+signal irq_level_triggered: std_logic:='0';
+signal irq_invert: std_logic:='0';
+
+signal pulses: unsigned(31 downto 0):=(others=>'0');
+signal interval: unsigned(31 downto 0):=(others=>'0');
+signal cnt: unsigned(31 downto 0):=(others=>'0');
+signal elapsed: std_logic:='0';
+
+begin
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		if rst_i='1' then
+			pulses<=(others=>'0');
+			interval<=(others=>'0');
+			cnt<=(others=>'0');
+			elapsed<='0';
+		else
+			if irq_level_triggered='0' then
+				elapsed<='0';
+			end if;
+			if pulses/=X""00000000"" or cnt/=X""00000000"" then
+				if cnt=X""00000000"" then
+					if pulses/=X""FFFFFFFF"" then
+						pulses<=pulses-1;
+					end if;
+					if pulses/=X""00000000"" then
+						cnt<=interval;
+					end if;
+				else
+					cnt<=cnt-1;
+				end if;
+				if cnt=X""00000001"" then
+					elapsed<='1';
+				end if;
+			end if;
+			
+			if wbs_cyc_i='1' and wbs_stb_i='1' and wbs_we_i='1' then
+				for i in wbs_sel_i'range loop
+					if wbs_sel_i(i)='1' then
+						if wbs_adr_i=""00""&X""000000"" then
+							pulses(i*8+7 downto i*8)<=
+								unsigned(wbs_dat_i(i*8+7 downto i*8));
+							cnt<=(others=>'0');
+						end if;
+						if wbs_adr_i=""00""&X""000001"" then
+							interval(i*8+7 downto i*8)<=
+								unsigned(wbs_dat_i(i*8+7 downto i*8));
+							cnt<=(others=>'0');
+						end if;
+						if wbs_adr_i=""00""&X""000002"" and i=0 then
+							irq_level_triggered<=wbs_dat_i(0);
+							irq_invert<=wbs_dat_i(1);
+						end if;
+						if wbs_adr_i=""00""&X""000003"" and wbs_dat_i(0)='1' and i=0 then
+							elapsed<='0';
+						end if;
+					end if;
+				end loop;
+			end if;
+		end if;
+	end if;
+end process;
+
+wbs_ack_o<=wbs_cyc_i and wbs_stb_i;
+wbs_dat_o<=std_logic_vector(pulses) when wbs_adr_i=""00""&X""000000"" else
+	std_logic_vector(interval) when wbs_adr_i=""00""&X""000001"" else
+	(others=>'-');
+
+elapsed_o<=elapsed xor irq_invert;
+
+end architecture;"
