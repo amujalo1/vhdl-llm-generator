@@ -1,5 +1,112 @@
 "input","output"
-"This component implements a very simple AXI4-Lite slave. It converts AXI4-Lite accesses to a simple address/read/write interface commonly used for mapping register banks and memory. Below figures shows how write transactions are signaled to user-code. Write transactions do not require an acknowledge. The user code **must** expect them in the speed they arrive. Below figures shows how read transactions are signaled to user-code. The validity of read-data must be acknowledged by _Rb_RdValid_. If this does not happen within _ReadTimeoutClks_g_ an error is signaled to the master who requested the read. Note that the read latency (from _Rb_Rd_ to _Rb_Valid_) does not have to be constant. The _olo_axi_lite_slave_ implements a read-timeout. In case the read data is not returned (_Rb_RdValid_) within the timeout specified, an error is signaled on the AXI bus. This mechanism prevents masters from becoming locked for infinite time if a read fails due to user code connected to the _olo_axi_lite_slave_. The _olo_axi_lite_slave_ does not aim for maximum performance. It requires 4 clock cycles per transaction (plus read-latency for read accesses). This is regarded as acceptable because the AXI4-Lite protocol does not aim for maximum performance anyways.","
+"This component implements a very simple AXI4-Lite slave. It converts AXI4-Lite accesses to a simple address/read/write interface commonly used for mapping register banks and memory. Below figures shows how write transactions are signaled to user-code. Write transactions do not require an acknowledge. The user code **must** expect them in the speed they arrive. Below figures shows how read transactions are signaled to user-code. The validity of read-data must be acknowledged by _Rb_RdValid_. If this does not happen within _ReadTimeoutClks_g_ an error is signaled to the master who requested the read. Note that the read latency (from _Rb_Rd_ to _Rb_Valid_) does not have to be constant. The _olo_axi_lite_slave_ implements a read-timeout. In case the read data is not returned (_Rb_RdValid_) within the timeout specified, an error is signaled on the AXI bus. This mechanism prevents masters from becoming locked for infinite time if a read fails due to user code connected to the _olo_axi_lite_slave_. The _olo_axi_lite_slave_ does not aim for maximum performance. It requires 4 clock cycles per transaction (plus read-latency for read accesses). This is regarded as acceptable because the AXI4-Lite protocol does not aim for maximum performance anyways.
+
+# VHDL Analysis for 'olo_axi_lite_slave.vhd'
+
+## File Comments
+- -------------------------------------------------------------------------------------------------
+- Copyright (c) 2024 by Oliver Bründler
+- All rights reserved.
+- Authors: Oliver Bruendler
+- -------------------------------------------------------------------------------------------------
+- -------------------------------------------------------------------------------------------------
+- Description
+- -------------------------------------------------------------------------------------------------
+- This entity implements an AXI-Lite Slave Interface, which can be used to
+- access registers and memory. On the user-side it provides a simple
+- Plus 49 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Library: work
+- Use: an older version, the documentation might not match the code.
+
+---------------------------------------------------------------------------------------------------
+-- Libraries
+---------------------------------------------------------------------------------------------------
+library ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+- Use: work.olo_axi_pkg_protocol.all
+- Use: work.olo_base_pkg_math.all
+- Use: work.olo_base_pkg_logic.all
+
+## Entity: olo_axi_lite_slave
+
+## Architecture: rtl of olo_axi_lite_slave
+
+### Signals
+- r: TwoProcess_r
+- r_next: TwoProcess_r
+- r_next <= v;
+    end process;
+
+    -- *** Sequential Process ***
+    p_seq: process (Clk) is
+    begin
+        if rising_edge(Clk) then
+            r <= r_next
+
+### Processes
+- Process 'p_comb :' with sensitivity list: r, S_AxiLite_ArAddr, S_AxiLite_ArValid, S_AxiLite_AwAddr, S_AxiLite_AwValid,
+                      S_AxiLite_WData, S_AxiLite_WStrb, S_AxiLite_WValid, S_AxiLite_BReady,
+                      S_AxiLite_RReady, Rb_RdData, Rb_RdValid
+  - Implements case-based selection logic
+  - Contains wait statements: for response transferred
+                if S_AxiLite_BReady = '1' then
+                    v.State  := Idle, for read data
+                if Rb_RdValid = '1' then
+                    v.RData  := Rb_RdData, for response transferred
+                if S_AxiLite_RReady = '1' then
+                    v.State  := Idle
+- Process 'p_seq :' (Clocked) (Has Reset) with sensitivity list: Clk
+  - Implements synchronous logic
+- Process 'Unnamed process' with sensitivity list: None (uses wait statements)
+  - Implements case-based selection logic
+  - Contains wait statements: for response transferred
+                if S_AxiLite_BReady = '1' then
+                    v.State  := Idle, for read data
+                if Rb_RdValid = '1' then
+                    v.RData  := Rb_RdData, for response transferred
+                if S_AxiLite_RReady = '1' then
+                    v.State  := Idle
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+
+### Concurrent Statements
+- -- Default values
+        v.ArReady := '0'
+- v.AwReady := '0'
+- v.Wr      := '0'
+- v.Rd      := '0'
+- -- FSM
+        case r.State is
+            -- Idle
+            when Idle =>
+                -- Idle
+                if S_AxiLite_ArValid = '1' then
+                    v.State   := RdCmd
+- Plus 3 more statements
+
+## Functional Analysis
+
+- This appears to be a Finite State Machine implementation
+- Contains 1 clock domain(s): Clk
+- Uses reset signal(s): Rst
+- Implements memory functionality
+- Implements control logic
+- Implements interface or communication protocol
+
+## Code Metrics
+- Line count: 251
+- Process count: 4
+- Signal count: 3
+
+## Summary
+- This module implements control logic.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'olo_axi_lite_slave.vhd' plays a specific role in the overall CPU architecture.
+","
 
 library ieee;
     use ieee.std_logic_1164.all;
@@ -190,7 +297,140 @@ begin
     end process;
 
 end architecture;"
-"This entity is a wrapper around [olo_axi_master_simple](olo_axi_master_simple.md) to allow the following things: - Access to non word-aligned addresses - Arbitrarily sized (not a multiple of AXI data words) transfers - AXI data width can be bigger than the data-width of the user interface Besides the capability for unaligned transfers, the user interface is the same as for [olo_axi_master_simple](olo_axi_master_simple.md) - **please read through the documentation of [olo_axi_master_simple](olo_axi_master_simple.md)**. Important topics covered there are: - Automatic splitting of transfers at 4kB boundaries - Automatic splitting of transfers at the maximum bust-size supported by AXI4 - High Latency vs. Low Latency transactions Important differences between _olo_axi_master_full_ and [olo_axi_master_simple](olo_axi_master_simple.md) are: - Transaction size (_CmdWr_Size_/_CmdRd_Size_) is given in **bytes** not **words** - Write data cannot be provided before the command (due to the required alignment) - No byte enables are provided on the user interface because data is aligned automatically. Note that due to the alignment logic, every command takes at least four clock cycles to process. In most cases there significant bursts are executed this does not matter but for cases where many very small (e.g. single-beat) transactions are required this entity is suboptimal. Most of the logic in this entity is related to unaligned and odd-sized transfers. So if you only require an AXI data width that is larger than the user interface data width, you may consider using [olo_axi_master_simple](olo_axi_master_simple.md) along with [olo_base_wconv_n2xn](../base/olo_base_wconv_n2xn.md)/ [olo_base_wconv_xn2n](../base/olo_base_wconv_xn2n.md) (width conversion) to achieve better performance with less resource utilization. Read and write logic are fully independent. So reads and writes can happen at the same time.","
+"This entity is a wrapper around [olo_axi_master_simple](olo_axi_master_simple.md) to allow the following things: - Access to non word-aligned addresses - Arbitrarily sized (not a multiple of AXI data words) transfers - AXI data width can be bigger than the data-width of the user interface Besides the capability for unaligned transfers, the user interface is the same as for [olo_axi_master_simple](olo_axi_master_simple.md) - **please read through the documentation of [olo_axi_master_simple](olo_axi_master_simple.md)**. Important topics covered there are: - Automatic splitting of transfers at 4kB boundaries - Automatic splitting of transfers at the maximum bust-size supported by AXI4 - High Latency vs. Low Latency transactions Important differences between _olo_axi_master_full_ and [olo_axi_master_simple](olo_axi_master_simple.md) are: - Transaction size (_CmdWr_Size_/_CmdRd_Size_) is given in **bytes** not **words** - Write data cannot be provided before the command (due to the required alignment) - No byte enables are provided on the user interface because data is aligned automatically. Note that due to the alignment logic, every command takes at least four clock cycles to process. In most cases there significant bursts are executed this does not matter but for cases where many very small (e.g. single-beat) transactions are required this entity is suboptimal. Most of the logic in this entity is related to unaligned and odd-sized transfers. So if you only require an AXI data width that is larger than the user interface data width, you may consider using [olo_axi_master_simple](olo_axi_master_simple.md) along with [olo_base_wconv_n2xn](../base/olo_base_wconv_n2xn.md)/ [olo_base_wconv_xn2n](../base/olo_base_wconv_xn2n.md) (width conversion) to achieve better performance with less resource utilization. Read and write logic are fully independent. So reads and writes can happen at the same time.
+
+# VHDL Analysis for 'olo_axi_master_full.vhd'
+
+## File Comments
+- -------------------------------------------------------------------------------------------------
+- Copyright (c) 2019 by Paul Scherrer Institute, Switzerland
+- Copyright (c) 2024 by Oliver Bründler
+- All rights reserved.
+- Authors: Oliver Bruendler
+- -------------------------------------------------------------------------------------------------
+- -------------------------------------------------------------------------------------------------
+- Description
+- -------------------------------------------------------------------------------------------------
+- This entity implements a full AXI master. In contrast to olo_axi_master_simple,
+- Plus 120 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Library: work
+- Use: an older version, the documentation might not match the code.
+
+---------------------------------------------------------------------------------------------------
+-- Libraries
+---------------------------------------------------------------------------------------------------
+library ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+- Use: ieee.std_logic_misc.all
+- Use: work.olo_base_pkg_math.all
+- Use: work.olo_base_pkg_logic.all
+
+## Entity: olo_axi_master_full
+
+## Architecture: rtl of olo_axi_master_full
+
+### Signals
+- r: TwoProcess_r
+- r_next: TwoProcess_r
+- WrPl_Data: std_logic_vector(Wr_Data'range)
+- WrPl_Vld: std_logic
+- AxiWrCmd_Rdy: std_logic
+- AxiWrDat_Rdy: std_logic
+- AxiWrDat_Data: std_logic_vector(AxiDataWidth_g - 1 downto 0)
+- WrPl_Rdy: std_logic
+- AxiWrDat_Be: std_logic_vector(AxiBytes_c - 1 downto 0)
+- WrWconvEna: std_logic
+- WrWconv_Vld: std_logic
+- WrWconv_Rdy: std_logic
+- WrWconv_Last: std_logic
+- WrData_Vld: std_logic
+- WrData_Data: std_logic_vector(AxiDataWidth_g - 1 downto 0)
+- WrData_Last: std_logic
+- WrData_We: std_logic_vector(AxiBytes_c / DataBytes_c - 1 downto 0)
+- WrData_Rdy: std_logic
+- WrDataEna: std_logic
+- AxiRdCmd_Rdy: std_logic
+- AxiRdDat_Rdy: std_logic
+- AxiRdDat_Vld: std_logic
+- AxiRdDat_Data: std_logic_vector(AxiDataWidth_g - 1 downto 0)
+- AxiRdDat_Last: std_logic
+- RdPl_Rdy: std_logic
+- RdPl_Data: std_logic_vector(UserDataWidth_g - 1 downto 0)
+- RdPl_Vld: std_logic
+- RdPl_Last: std_logic
+- ***
+        r_next <= v;
+    end process;
+
+    -- *** Registered Process ***
+    p_reg: process (Clk) is
+    begin
+        if rising_edge(Clk) then
+            r <= r_next
+- InData: std_logic_vector(UserDataWidth_g downto 0)
+- OutData: std_logic_vector(UserDataWidth_g downto 0)
+
+### Component Instantiations
+- Instance 'i_axi' of component 'olo_axi_master_simple'
+- Instance 'i_pl_wr_data' of component 'olo_base_pl_stage'
+- Instance 'i_wc_wr' of component 'olo_base_wconv_n2xn'
+- Instance 'i_pl_rd_data' of component 'olo_base_pl_stage'
+
+### Processes
+- Process 'p_comb :' (Has Reset) with sensitivity list: r,
+                      CmdWr_Addr, CmdWr_Size, CmdWr_Valid, CmdWr_LowLat, CmdRd_Addr, CmdRd_Size, CmdRd_Valid, CmdRd_LowLat,
+                      AxiWrCmd_Rdy, AxiWrDat_Rdy, AxiRdCmd_Rdy, AxiRdDat_Vld, AxiRdDat_Data,
+                      WrWconv_Rdy, WrPl_Vld, WrData_Vld, WrData_Data, WrData_Last, WrData_We, RdPl_Rdy
+  - Implements case-based selection logic
+  - Contains wait statements: for the last beat te be accepted without reading more data from the FIFO
+                when Last_s =>
+                    v.WrAlignVld := '1', until reception of all data is done
+                when Wait_s =>
+                    if unsigned(r.RdAlignByteVld) = 0 then
+                        v.RdDataFsm := Idle_s
+- Process 'p_reg :' (Clocked) (Has Reset) with sensitivity list: Clk
+  - Implements synchronous logic
+- Process 'Unnamed process' (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements case-based selection logic
+  - Contains wait statements: for the last beat te be accepted without reading more data from the FIFO
+                when Last_s =>
+                    v.WrAlignVld := '1', until reception of all data is done
+                when Wait_s =>
+                    if unsigned(r.RdAlignByteVld) = 0 then
+                        v.RdDataFsm := Idle_s
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+
+### Concurrent Statements
+- return Addr_v
+
+## Functional Analysis
+
+- Contains 2 clock domain(s): clock, Clk
+- Uses reset signal(s): WrStartTf, M_Axi_ArBurst, RdDatFirstBe, first, M_Axi_AwBurst, Rst, RdFirstBe, RdFirstAddrOffs
+- Implements memory functionality
+- Implements arithmetic/computational functionality
+- Implements control logic
+- Implements interface or communication protocol
+- May be part of a pipeline architecture
+- This appears to be a CPU component
+- Implements instruction execution functionality
+- Defines custom functions: alignedAddr
+
+## Code Metrics
+- Line count: 777
+- Process count: 4
+- Signal count: 31
+
+## Summary
+- This module implements control logic.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'olo_axi_master_full.vhd' plays a specific role in the overall CPU architecture.
+","
 
 library ieee;
     use ieee.std_logic_1164.all;
@@ -839,7 +1079,139 @@ begin
     end generate;
 
 end architecture;"
-"This entity executes transactions requested through a simple command interface on an AXI4 bus according to all specifications. This entity includes FIFOs to buffer read- and write-data but not for the commands. The user can request transaction of any size and they will get split automatically in order to not exceed AXI bust size and not burst over 4kB boundaries (prohibited by the AXI4 specification). The response is sent to the user when his whole command is executed (which may involve multiple AXI transactions). For each command there are two operation modes: - High Latency - The AXI-master only starts the command after sufficient data (write-case) or space (read-case) is available in the corresponding data FIFO - This ensures that commands can be executed without blocking the AXI bus. - This approach leads to more latency, since the user has to handle data before the command is sent. - Suggested default. - Low Latency - The AXI-master starts the transaction immediately, with no regard on FIFO states. - If the user logic cannot provide the data in-time, the AXI bus may get blocked. - This approach leads to lowest latency since the user logic can prepare the data on the fly without the transaction being delayed. This entity does not handle unaligned transactions and word-width conversions. The data width of the user interface and the AXI bus are the same and all commands must be aligned to that word-width. This is the reason for the term _simple_ in the name of the entity. Read and write logic are fully independent. Reads and writes can happen at the same time. There is no required timing relationship between command and data signals. So for writes the user can provide write data before, after or together with the command. Note that this entity does require a minimum of four clock cycles for every write transaction. **It is not optimal for producing access patterns with many single-beat transactions.**","
+"This entity executes transactions requested through a simple command interface on an AXI4 bus according to all specifications. This entity includes FIFOs to buffer read- and write-data but not for the commands. The user can request transaction of any size and they will get split automatically in order to not exceed AXI bust size and not burst over 4kB boundaries (prohibited by the AXI4 specification). The response is sent to the user when his whole command is executed (which may involve multiple AXI transactions). For each command there are two operation modes: - High Latency - The AXI-master only starts the command after sufficient data (write-case) or space (read-case) is available in the corresponding data FIFO - This ensures that commands can be executed without blocking the AXI bus. - This approach leads to more latency, since the user has to handle data before the command is sent. - Suggested default. - Low Latency - The AXI-master starts the transaction immediately, with no regard on FIFO states. - If the user logic cannot provide the data in-time, the AXI bus may get blocked. - This approach leads to lowest latency since the user logic can prepare the data on the fly without the transaction being delayed. This entity does not handle unaligned transactions and word-width conversions. The data width of the user interface and the AXI bus are the same and all commands must be aligned to that word-width. This is the reason for the term _simple_ in the name of the entity. Read and write logic are fully independent. Reads and writes can happen at the same time. There is no required timing relationship between command and data signals. So for writes the user can provide write data before, after or together with the command. Note that this entity does require a minimum of four clock cycles for every write transaction. **It is not optimal for producing access patterns with many single-beat transactions.**
+
+# VHDL Analysis for 'olo_axi_master_simple.vhd'
+
+## File Comments
+- -------------------------------------------------------------------------------------------------
+- Copyright (c) 2019 by Paul Scherrer Institute, Switzerland
+- Copyright (c) 2024 by Oliver Bründler
+- All rights reserved.
+- Authors: Oliver Bruendler
+- -------------------------------------------------------------------------------------------------
+- -------------------------------------------------------------------------------------------------
+- Description
+- -------------------------------------------------------------------------------------------------
+- This entity implements a simple AXI master. Simple means: It does not
+- Plus 147 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Library: work
+- Use: an older version, the documentation might not match the code.
+
+---------------------------------------------------------------------------------------------------
+-- Libraries
+---------------------------------------------------------------------------------------------------
+library ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+- Use: work.olo_base_pkg_math.all
+- Use: work.olo_base_pkg_logic.all
+- Use: work.olo_axi_pkg_protocol.all
+- Use: registered WDataFifoWrite: This helps with timing and it does not introduce any risk since
+            -- .. the decrement is still done immediately, the increment is delayed by one clock cycle. So worst
+            -- .. case a High-Latency transfer is delayed by one cycle which is acceptable.
+            v.WDataFifoWrite := WrData_Rdy_I and Wr_Valid
+- Use: v. because it may have been modified above and this modification has not to be overriden
+                if WrRespIsLast = '1' then
+                    if (M_Axi_BResp /= AxiResp_Okay_c) then
+                        v.Wr_Error := '1'
+- Use: registered RDataFifoRead: This helps with timing and it does not introduce any risk since
+            -- .. the decrement is still done immediately, the increment is delayed by one clock cycle. So worst
+            -- .. case a High-Latency transfer is delayed by one cycle which is acceptable.
+            v.RDataFifoRead := Rd_Ready and RdDat_Vld_I
+- Use: v. because it may have been modified above and this modification has not to be overriden
+                if RdRespIsLast = '1' then
+                    if (M_Axi_RResp /= AxiResp_Okay_c) then
+                        v.Rd_Error := '1'
+
+## Entity: olo_axi_master_simple
+
+## Architecture: rtl of olo_axi_master_simple
+
+### Signals
+- r: TwoProcess_r
+- r_next: TwoProcess_r
+- WrDataFifoORdy: std_logic
+- WrDataFifoOVld: std_logic
+- WrTransFifoInVld: std_logic
+- WrTransFifoBeats: std_logic_vector(BeatsBits_c - 1 downto 0)
+- WrTransFifoOutVld: std_logic
+- WrRespIsLast: std_logic
+- WrRespFifoVld: std_logic
+- WrData_Rdy_I: std_logic
+- RdTransFifoInVld: std_logic
+- RdRespIsLast: std_logic
+- RdRespFifoVld: std_logic
+- RdDat_Vld_I: std_logic
+- RdRespLast: std_logic
+- M_Axi_RReady_I: std_logic
+- ***
+        r_next <= v;
+    end process;
+
+    -- *** Registered Process ***
+    p_reg: process (Clk) is
+    begin
+        if rising_edge(Clk) then
+            r <= r_next
+- InData: std_logic_vector(Wr_Data'length + Wr_Be'length - 1 downto 0)
+- OutData: std_logic_vector(InData'range)
+- InData: std_logic_vector(Rd_Data'length downto 0)
+- OutData: std_logic_vector(Rd_Data'length downto 0)
+
+### Component Instantiations
+- Instance 'i_fifo_wr_trans' of component 'olo_base_fifo_sync'
+- Instance 'i_fifo_wr_data' of component 'olo_base_fifo_sync'
+- Instance 'i_fifo_wr_resp' of component 'olo_base_fifo_sync'
+- Instance 'i_fifo_rd_data' of component 'olo_base_fifo_sync'
+- Instance 'i_fifo_rd_resp' of component 'olo_base_fifo_sync'
+
+### Processes
+- Process 'p_assert :' (Clocked) with sensitivity list: Clk
+  - Implements synchronous logic
+- Process 'p_comb :' (Has Reset) with sensitivity list: r, M_Axi_AwReady, M_Axi_BValid, M_Axi_BResp, WrDataFifoORdy, WrDataFifoOVld, WrTransFifoOutVld,
+                      WrTransFifoBeats, WrRespIsLast, WrRespFifoVld, CmdWr_Addr, CmdWr_Size, CmdWr_LowLat, CmdWr_Valid,
+                      Wr_Valid, WrData_Rdy_I, M_Axi_ArReady, RdRespIsLast, RdRespFifoVld, RdRespLast, CmdRd_Addr,
+                      CmdRd_Size, CmdRd_LowLat, CmdRd_Valid, Rd_Ready, RdDat_Vld_I, M_Axi_RResp
+  - Implements case-based selection logic
+- Process 'p_reg :' (Clocked) (Has Reset) with sensitivity list: Clk
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+- Process 'Unnamed process' (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements case-based selection logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+
+### Concurrent Statements
+- Masked_v(UnusedAddrBits_c - 1 downto 0) := (others => '0')
+- return Masked_v
+
+## Functional Analysis
+
+- This appears to be a Finite State Machine implementation
+- Contains 2 clock domain(s): Clk, clock
+- Uses reset signal(s): StartWBurst_v, M_Axi_ArBurst, M_Axi_AwBurst, AxiBurst_Incr_c, Rst, burst, worst
+- Implements memory functionality
+- Implements control logic
+- Implements interface or communication protocol
+- This appears to be a CPU component
+- Implements instruction execution functionality
+- Defines custom functions: addrMasked
+
+## Code Metrics
+- Line count: 837
+- Process count: 6
+- Signal count: 21
+
+## Summary
+- This module implements control logic.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'olo_axi_master_simple.vhd' plays a specific role in the overall CPU architecture.
+","
 
 library ieee;
     use ieee.std_logic_1164.all;
@@ -1538,7 +1910,42 @@ begin
     end generate;
 
 end architecture;"
-"VHDL component olo_axi_pkg_protocol","
+"VHDL component olo_axi_pkg_protocol
+
+# VHDL Analysis for 'olo_axi_pkg_protocol.vhd'
+
+## File Comments
+- -------------------------------------------------------------------------------------------------
+- Copyright (c) 2024 by Oliver Bründler
+- All rights reserved.
+- Authors: Oliver Bruendler
+- -------------------------------------------------------------------------------------------------
+- -------------------------------------------------------------------------------------------------
+- Description
+- -------------------------------------------------------------------------------------------------
+- Package containing axi protocol definitions
+- Documentation:
+- Plus 10 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+
+## Functional Analysis
+
+- Uses reset signal(s): AxiBurst_Wrap_c, AxiBurst_Incr_c, AxiBurst_Fixed_c, Burst_t
+
+## Code Metrics
+- Line count: 58
+- Process count: N/A
+- Signal count: N/A
+
+## Summary
+- This module appears to be a general-purpose digital logic implementation.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'olo_axi_pkg_protocol.vhd' plays a specific role in the overall CPU architecture.
+","
 
 library ieee;
     use ieee.std_logic_1164.all;
@@ -1572,7 +1979,83 @@ end package;
 package body olo_axi_pkg_protocol is
 
 end package body;"
-"This component implements a pipeline stage for AXI4 interfaces. The component registers all signals of the interface. Note that the component can be used for AXI4-Lite by simply leaving all unused signals unconnected.","
+"This component implements a pipeline stage for AXI4 interfaces. The component registers all signals of the interface. Note that the component can be used for AXI4-Lite by simply leaving all unused signals unconnected.
+
+# VHDL Analysis for 'olo_axi_pl_stage.vhd'
+
+## File Comments
+- -------------------------------------------------------------------------------------------------
+- Copyright (c) 2019 by Enclustra GmbH, Switzerland
+- Copyright (c) 2024 by Oliver Bründler
+- All rights reserved.
+- Authors: Eduardo del Castillo, Oliver Bründler
+- -------------------------------------------------------------------------------------------------
+- -------------------------------------------------------------------------------------------------
+- Description
+- -------------------------------------------------------------------------------------------------
+- This entity implements multiple pipeline stages for an axi4 interface.
+- Plus 46 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Use: an older version, the documentation might not match the code.
+
+---------------------------------------------------------------------------------------------------
+-- Libraries
+---------------------------------------------------------------------------------------------------
+library ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+
+## Entity: olo_axi_pl_stage
+
+## Architecture: rtl of olo_axi_pl_stage
+
+### Signals
+- AwDataIn: std_logic_vector(AwRegionRng_c'high downto 0)
+- AwDataOut: std_logic_vector(AwRegionRng_c'high downto 0)
+- WDataIn: std_logic_vector(WUserRng_c'high downto 0)
+- WDataOut: std_logic_vector(WUserRng_c'high downto 0)
+- BDataIn: std_logic_vector(BuserRng_c'high downto 0)
+- BDataOut: std_logic_vector(BuserRng_c'high downto 0)
+- ArDataIn: std_logic_vector(ArRegionRng_c'high downto 0)
+- ArDataOut: std_logic_vector(ArRegionRng_c'high downto 0)
+- RDataIn: std_logic_vector(RUserRng_c'high downto 0)
+- RDataOut: std_logic_vector(RUserRng_c'high downto 0)
+
+### Component Instantiations
+- Instance 'i_pl' of component 'olo_base_pl_stage'
+- Instance 'i_pl' of component 'olo_base_pl_stage'
+- Instance 'i_bch_pl' of component 'olo_base_pl_stage'
+- Instance 'i_pl' of component 'olo_base_pl_stage'
+- Instance 'i_rch_pl' of component 'olo_base_pl_stage'
+
+### Concurrent Statements
+- AwDataIn(AwCacheRng_c)  <= S_AwCache
+- AwDataIn(AwLockIdx_C)   <= S_AwLock
+- AwDataIn(AwBurstRng_c)  <= S_AwBurst
+- AwDataIn(AwSizeRng_c)   <= S_AwSize
+- AwDataIn(AwLenRng_c)    <= S_AwLen
+- Plus 17 more statements
+
+## Functional Analysis
+
+- Contains 1 clock domain(s): Clk
+- Uses reset signal(s): S_AwBurst, ArBurstRng_c, S_ArBurst, Rst, AwBurstRng_c, M_AwBurst, M_ArBurst
+- Implements control logic
+- Implements interface or communication protocol
+- May be part of a pipeline architecture
+
+## Code Metrics
+- Line count: 398
+- Process count: 0
+- Signal count: 10
+
+## Summary
+- This module implements control logic.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'olo_axi_pl_stage.vhd' plays a specific role in the overall CPU architecture.
+","
 
 library ieee;
     use ieee.std_logic_1164.all;

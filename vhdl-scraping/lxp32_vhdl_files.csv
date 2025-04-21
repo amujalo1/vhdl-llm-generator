@@ -1,0 +1,4376 @@
+"input","output"
+"# VHDL Analysis for 'lxp32_alu.vhd'
+
+## File Comments
+- -------------------------------------------------------------------
+- Arithmetic logic unit
+- Part of the LXP32 CPU
+- Copyright (c) 2016 by Alex I. Kuznetsov
+- Performs arithmetic and logic operations.
+- -------------------------------------------------------------------
+- Add/subtract
+- Comparator (needs cmd_negate_op2_i to work correctly)
+- Bitwise operations (and, or, xor)
+- Note: (a or b) = (a and b) or (a xor b)
+- Plus 5 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+
+## Entity: lxp32_alu
+
+## Architecture: rtl of lxp32_alu
+
+### Signals
+- addend1: unsigned(31 downto 0)
+- addend2: unsigned(31 downto 0)
+- adder_result: unsigned(32 downto 0)
+- adder_we: std_logic
+- cmp_eq: std_logic
+- cmp_carry: std_logic
+- cmp_s1: std_logic
+- cmp_s2: std_logic
+- logic_result: std_logic_vector(31 downto 0)
+- logic_we: std_logic
+- mul_result: std_logic_vector(31 downto 0)
+- mul_ce: std_logic
+- mul_we: std_logic
+- div_result: std_logic_vector(31 downto 0)
+- div_ce: std_logic
+- div_we: std_logic
+- shift_result: std_logic_vector(31 downto 0)
+- shift_ce: std_logic
+- shift_we: std_logic
+- result_mux: std_logic_vector(31 downto 0)
+- result_we: std_logic
+- busy: std_logic:='0'
+
+### Processes
+- Process 'Unnamed process' (Clocked) with sensitivity list: clk_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: clk_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+
+## Functional Analysis
+
+- Uses reset signal(s): rst_i
+- Implements arithmetic/computational functionality
+- Implements control logic
+- May be part of a pipeline architecture
+- This appears to be a CPU component
+
+## Code Metrics
+- Line count: 251
+- Process count: 4
+- Signal count: 22
+
+## Summary
+- This module implements control logic.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'lxp32_alu.vhd' plays a specific role in the overall CPU architecture.
+","---------------------------------------------------------------------
+-- Arithmetic logic unit
+--
+-- Part of the LXP32 CPU
+--
+-- Copyright (c) 2016 by Alex I. Kuznetsov
+--
+-- Performs arithmetic and logic operations.
+---------------------------------------------------------------------
+
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+
+entity lxp32_alu is
+	generic(
+		DIVIDER_EN: boolean;
+		MUL_ARCH: string
+	);
+	port(
+		clk_i: in std_logic;
+		rst_i: in std_logic;
+		
+		valid_i: in std_logic;
+		
+		cmd_signed_i: in std_logic;
+		cmd_addsub_i: in std_logic;
+		cmd_mul_i: in std_logic;
+		cmd_div_i: in std_logic;
+		cmd_div_mod_i: in std_logic;
+		cmd_cmp_i: in std_logic;
+		cmd_negate_op2_i: in std_logic;
+		cmd_and_i: in std_logic;
+		cmd_xor_i: in std_logic;
+		cmd_shift_i: in std_logic;
+		cmd_shift_right_i: in std_logic;
+		
+		op1_i: in std_logic_vector(31 downto 0);
+		op2_i: in std_logic_vector(31 downto 0);
+		
+		result_o: out std_logic_vector(31 downto 0);
+		
+		cmp_eq_o: out std_logic;
+		cmp_ug_o: out std_logic;
+		cmp_sg_o: out std_logic;
+		
+		we_o: out std_logic;
+		busy_o: out std_logic
+	);
+end entity;
+
+architecture rtl of lxp32_alu is
+
+signal addend1: unsigned(31 downto 0);
+signal addend2: unsigned(31 downto 0);
+signal adder_result: unsigned(32 downto 0);
+signal adder_we: std_logic;
+
+signal cmp_eq: std_logic;
+signal cmp_carry: std_logic;
+signal cmp_s1: std_logic;
+signal cmp_s2: std_logic;
+
+signal logic_result: std_logic_vector(31 downto 0);
+signal logic_we: std_logic;
+
+signal mul_result: std_logic_vector(31 downto 0);
+signal mul_ce: std_logic;
+signal mul_we: std_logic;
+
+signal div_result: std_logic_vector(31 downto 0);
+signal div_ce: std_logic;
+signal div_we: std_logic;
+
+signal shift_result: std_logic_vector(31 downto 0);
+signal shift_ce: std_logic;
+signal shift_we: std_logic;
+
+signal result_mux: std_logic_vector(31 downto 0);
+signal result_we: std_logic;
+
+signal busy: std_logic:='0';
+
+begin
+
+assert MUL_ARCH=""dsp"" or MUL_ARCH=""seq"" or MUL_ARCH=""opt""
+	report ""Invalid MUL_ARCH generic value: dsp, opt or seq expected""
+	severity failure;
+
+-- Add/subtract
+
+addend1<=unsigned(op1_i);
+
+addend2_gen: for i in addend2'range generate
+	addend2(i)<=op2_i(i) xor cmd_negate_op2_i;
+end generate;
+
+adder_result<=(""0""&addend1)+(""0""&addend2)+(to_unsigned(0,adder_result'length-1)&cmd_negate_op2_i);
+adder_we<=cmd_addsub_i and valid_i;
+
+-- Comparator (needs cmd_negate_op2_i to work correctly)
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		if valid_i='1' and cmd_cmp_i='1' then
+			if op1_i=op2_i then
+				cmp_eq<='1';
+			else
+				cmp_eq<='0';
+			end if;
+			
+			cmp_carry<=adder_result(adder_result'high);
+			cmp_s1<=op1_i(op1_i'high);
+			cmp_s2<=op2_i(op2_i'high);
+		end if;
+	end if;
+end process;
+
+cmp_eq_o<=cmp_eq;
+cmp_ug_o<=cmp_carry and not cmp_eq;
+cmp_sg_o<=((cmp_s1 and cmp_s2 and cmp_carry) or
+	(not cmp_s1 and not cmp_s2 and cmp_carry) or
+	(not cmp_s1 and cmp_s2)) and not cmp_eq;
+
+-- Bitwise operations (and, or, xor)
+-- Note: (a or b) = (a and b) or (a xor b)
+
+logic_result_gen: for i in logic_result'range generate
+	logic_result(i)<=((op1_i(i) and op2_i(i)) and cmd_and_i) or
+		((op1_i(i) xor op2_i(i)) and cmd_xor_i);
+end generate;
+
+logic_we<=(cmd_and_i or cmd_xor_i) and valid_i;
+
+-- Multiplier
+
+mul_ce<=cmd_mul_i and valid_i;
+
+gen_mul_dsp: if MUL_ARCH=""dsp"" generate
+	mul_inst: entity work.lxp32_mul_dsp(rtl)
+		port map(
+			clk_i=>clk_i,
+			rst_i=>rst_i,
+			ce_i=>mul_ce,
+			op1_i=>op1_i,
+			op2_i=>op2_i,
+			ce_o=>mul_we,
+			result_o=>mul_result
+		);
+end generate;
+
+gen_mul_opt: if MUL_ARCH=""opt"" generate
+	mul_inst: entity work.lxp32_mul_opt(rtl)
+		port map(
+			clk_i=>clk_i,
+			rst_i=>rst_i,
+			ce_i=>mul_ce,
+			op1_i=>op1_i,
+			op2_i=>op2_i,
+			ce_o=>mul_we,
+			result_o=>mul_result
+		);
+end generate;
+
+gen_mul_seq: if MUL_ARCH=""seq"" generate
+	mul_inst: entity work.lxp32_mul_seq(rtl)
+		port map(
+			clk_i=>clk_i,
+			rst_i=>rst_i,
+			ce_i=>mul_ce,
+			op1_i=>op1_i,
+			op2_i=>op2_i,
+			ce_o=>mul_we,
+			result_o=>mul_result
+		);
+end generate;
+
+-- Divider
+
+div_ce<=cmd_div_i and valid_i;
+
+gen_divider: if DIVIDER_EN generate
+	divider_inst: entity work.lxp32_divider(rtl)
+		port map(
+			clk_i=>clk_i,
+			rst_i=>rst_i,
+			ce_i=>div_ce,
+			op1_i=>op1_i,
+			op2_i=>op2_i,
+			signed_i=>cmd_signed_i,
+			rem_i=>cmd_div_mod_i,
+			ce_o=>div_we,
+			result_o=>div_result
+		);
+end generate;
+
+gen_no_divider: if not DIVIDER_EN generate
+	div_we<=div_ce;
+	div_result<=(others=>'0');
+end generate;
+
+-- Shifter
+
+shift_ce<=cmd_shift_i and valid_i;
+
+shifter_inst: entity work.lxp32_shifter(rtl)
+	port map(
+		clk_i=>clk_i,
+		rst_i=>rst_i,
+		ce_i=>shift_ce,
+		d_i=>op1_i,
+		s_i=>op2_i(4 downto 0),
+		right_i=>cmd_shift_right_i,
+		sig_i=>cmd_signed_i,
+		ce_o=>shift_we,
+		d_o=>shift_result
+	);
+
+-- Result multiplexer
+
+result_mux_gen: for i in result_mux'range generate
+	result_mux(i)<=(adder_result(i) and adder_we) or
+		(logic_result(i) and logic_we) or
+		(mul_result(i) and mul_we) or
+		(div_result(i) and div_we) or
+		(shift_result(i) and shift_we);
+end generate;
+
+result_o<=result_mux;
+
+result_we<=adder_we or logic_we or mul_we or div_we or shift_we;
+we_o<=result_we;
+
+-- Pipeline control
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		if rst_i='1' or result_we='1' then
+			busy<='0';
+		elsif shift_ce='1' or mul_ce='1' or div_ce='1' then
+			busy<='1';
+		end if;
+	end if;
+end process;
+
+busy_o<=busy;
+
+end architecture;
+"
+"# VHDL Analysis for 'lxp32_compl.vhd'
+
+## File Comments
+- -------------------------------------------------------------------
+- Complementor
+- Part of the LXP32 CPU
+- Copyright (c) 2016 by Alex I. Kuznetsov
+- Computes a 2's complement of its input. Used as an auxiliary
+- unit in the divider.
+- -------------------------------------------------------------------
+
+## Libraries and Packages
+- Library: ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+
+## Entity: lxp32_compl
+
+## Architecture: rtl of lxp32_compl
+
+### Signals
+- d_prepared: unsigned(d_i'range)
+- sum_low: unsigned(16 downto 0)
+- d_high: unsigned(15 downto 0)
+- sum_high: unsigned(15 downto 0)
+
+### Processes
+- Process 'Unnamed process' (Clocked) with sensitivity list: clk_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+
+## Functional Analysis
+
+- This appears to be a CPU component
+
+## Code Metrics
+- Line count: 51
+- Process count: 2
+- Signal count: 4
+
+## Summary
+- This module appears to be a general-purpose digital logic implementation.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'lxp32_compl.vhd' plays a specific role in the overall CPU architecture.
+","---------------------------------------------------------------------
+-- Complementor
+--
+-- Part of the LXP32 CPU
+--
+-- Copyright (c) 2016 by Alex I. Kuznetsov
+--
+-- Computes a 2's complement of its input. Used as an auxiliary
+-- unit in the divider.
+---------------------------------------------------------------------
+
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+
+entity lxp32_compl is
+	port(
+		clk_i: in std_logic;
+		compl_i: in std_logic;
+		d_i: in std_logic_vector(31 downto 0);
+		d_o: out std_logic_vector(31 downto 0)
+	);
+end entity;
+
+architecture rtl of lxp32_compl is
+
+signal d_prepared: unsigned(d_i'range);
+signal sum_low: unsigned(16 downto 0);
+signal d_high: unsigned(15 downto 0);
+signal sum_high: unsigned(15 downto 0);
+
+begin
+
+d_prepared_gen: for i in d_prepared'range generate
+	d_prepared(i)<=d_i(i) xor compl_i;
+end generate;
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		sum_low<=(""0""&d_prepared(15 downto 0))+(to_unsigned(0,16)&compl_i);
+		d_high<=d_prepared(31 downto 16);
+	end if;
+end process;
+
+sum_high<=d_high+(to_unsigned(0,15)&sum_low(sum_low'high));
+
+d_o<=std_logic_vector(sum_high&sum_low(15 downto 0));
+
+end architecture;
+"
+"# VHDL Analysis for 'lxp32_cpu.vhd'
+
+## File Comments
+- -------------------------------------------------------------------
+- LXP32 CPU Core
+- Part of the LXP32 CPU
+- Copyright (c) 2016 by Alex I. Kuznetsov
+- -------------------------------------------------------------------
+
+## Libraries and Packages
+- Library: ieee
+- Use: ieee.std_logic_1164.all
+
+## Entity: lxp32_cpu
+
+## Architecture: rtl of lxp32_cpu
+
+### Signals
+- fetch_word: std_logic_vector(31 downto 0)
+- fetch_next_ip: std_logic_vector(29 downto 0)
+- fetch_current_ip: std_logic_vector(29 downto 0)
+- fetch_valid: std_logic
+- fetch_jump_ready: std_logic
+- decode_ready: std_logic
+- decode_valid: std_logic
+- decode_cmd_loadop3: std_logic
+- decode_cmd_signed: std_logic
+- decode_cmd_dbus: std_logic
+- decode_cmd_dbus_store: std_logic
+- decode_cmd_dbus_byte: std_logic
+- decode_cmd_addsub: std_logic
+- decode_cmd_mul: std_logic
+- decode_cmd_div: std_logic
+- decode_cmd_div_mod: std_logic
+- decode_cmd_cmp: std_logic
+- decode_cmd_jump: std_logic
+- decode_cmd_negate_op2: std_logic
+- decode_cmd_and: std_logic
+- decode_cmd_xor: std_logic
+- decode_cmd_shift: std_logic
+- decode_cmd_shift_right: std_logic
+- decode_jump_type: std_logic_vector(3 downto 0)
+- decode_op1: std_logic_vector(31 downto 0)
+- decode_op2: std_logic_vector(31 downto 0)
+- decode_op3: std_logic_vector(31 downto 0)
+- decode_dst: std_logic_vector(7 downto 0)
+- execute_ready: std_logic
+- execute_jump_valid: std_logic
+- execute_jump_dst: std_logic_vector(29 downto 0)
+- sp_raddr1: std_logic_vector(7 downto 0)
+- sp_rdata1: std_logic_vector(31 downto 0)
+- sp_raddr2: std_logic_vector(7 downto 0)
+- sp_rdata2: std_logic_vector(31 downto 0)
+- sp_waddr: std_logic_vector(7 downto 0)
+- sp_we: std_logic
+- sp_wdata: std_logic_vector(31 downto 0)
+- interrupt_valid: std_logic
+- interrupt_vector: std_logic_vector(2 downto 0)
+- interrupt_ready: std_logic
+- interrupt_return: std_logic
+- interrupt_wakeup: std_logic
+
+## Functional Analysis
+
+- Uses reset signal(s): rst_i
+- This appears to be a CPU component
+
+## Code Metrics
+- Line count: 262
+- Process count: 0
+- Signal count: 43
+
+## Summary
+- This module appears to be a general-purpose digital logic implementation.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'lxp32_cpu.vhd' plays a specific role in the overall CPU architecture.
+","---------------------------------------------------------------------
+-- LXP32 CPU Core
+--
+-- Part of the LXP32 CPU
+--
+-- Copyright (c) 2016 by Alex I. Kuznetsov
+---------------------------------------------------------------------
+
+library ieee;
+use ieee.std_logic_1164.all;
+
+entity lxp32_cpu is
+	generic(
+		DBUS_RMW: boolean;
+		DIVIDER_EN: boolean;
+		MUL_ARCH: string;
+		START_ADDR: std_logic_vector(31 downto 0)
+	);
+	port(
+		clk_i: in std_logic;
+		rst_i: in std_logic;
+		
+		lli_re_o: out std_logic;
+		lli_adr_o: out std_logic_vector(29 downto 0);
+		lli_dat_i: in std_logic_vector(31 downto 0);
+		lli_busy_i: in std_logic;
+		
+		dbus_cyc_o: out std_logic;
+		dbus_stb_o: out std_logic;
+		dbus_we_o: out std_logic;
+		dbus_sel_o: out std_logic_vector(3 downto 0);
+		dbus_ack_i: in std_logic;
+		dbus_adr_o: out std_logic_vector(31 downto 2);
+		dbus_dat_o: out std_logic_vector(31 downto 0);
+		dbus_dat_i: in std_logic_vector(31 downto 0);
+		
+		irq_i: in std_logic_vector(7 downto 0)
+	);
+end entity;
+
+architecture rtl of lxp32_cpu is
+
+signal fetch_word: std_logic_vector(31 downto 0);
+signal fetch_next_ip: std_logic_vector(29 downto 0);
+signal fetch_current_ip: std_logic_vector(29 downto 0);
+signal fetch_valid: std_logic;
+signal fetch_jump_ready: std_logic;
+
+signal decode_ready: std_logic;
+signal decode_valid: std_logic;
+
+signal decode_cmd_loadop3: std_logic;
+signal decode_cmd_signed: std_logic;
+signal decode_cmd_dbus: std_logic;
+signal decode_cmd_dbus_store: std_logic;
+signal decode_cmd_dbus_byte: std_logic;
+signal decode_cmd_addsub: std_logic;
+signal decode_cmd_mul: std_logic;
+signal decode_cmd_div: std_logic;
+signal decode_cmd_div_mod: std_logic;
+signal decode_cmd_cmp: std_logic;
+signal decode_cmd_jump: std_logic;
+signal decode_cmd_negate_op2: std_logic;
+signal decode_cmd_and: std_logic;
+signal decode_cmd_xor: std_logic;
+signal decode_cmd_shift: std_logic;
+signal decode_cmd_shift_right: std_logic;
+
+signal decode_jump_type: std_logic_vector(3 downto 0);
+
+signal decode_op1: std_logic_vector(31 downto 0);
+signal decode_op2: std_logic_vector(31 downto 0);
+signal decode_op3: std_logic_vector(31 downto 0);
+signal decode_dst: std_logic_vector(7 downto 0);
+
+signal execute_ready: std_logic;
+signal execute_jump_valid: std_logic;
+signal execute_jump_dst: std_logic_vector(29 downto 0);
+
+signal sp_raddr1: std_logic_vector(7 downto 0);
+signal sp_rdata1: std_logic_vector(31 downto 0);
+signal sp_raddr2: std_logic_vector(7 downto 0);
+signal sp_rdata2: std_logic_vector(31 downto 0);
+signal sp_waddr: std_logic_vector(7 downto 0);
+signal sp_we: std_logic;
+signal sp_wdata: std_logic_vector(31 downto 0);
+
+signal interrupt_valid: std_logic;
+signal interrupt_vector: std_logic_vector(2 downto 0);
+signal interrupt_ready: std_logic;
+signal interrupt_return: std_logic;
+signal interrupt_wakeup: std_logic;
+
+begin
+
+fetch_inst: entity work.lxp32_fetch(rtl)
+	generic map(
+		START_ADDR=>START_ADDR
+	)
+	port map(
+		clk_i=>clk_i,
+		rst_i=>rst_i,
+		
+		lli_re_o=>lli_re_o,
+		lli_adr_o=>lli_adr_o,
+		lli_dat_i=>lli_dat_i,
+		lli_busy_i=>lli_busy_i,
+		
+		word_o=>fetch_word,
+		next_ip_o=>fetch_next_ip,
+		current_ip_o=>fetch_current_ip,
+		valid_o=>fetch_valid,
+		ready_i=>decode_ready,
+		
+		jump_valid_i=>execute_jump_valid,
+		jump_dst_i=>execute_jump_dst,
+		jump_ready_o=>fetch_jump_ready
+	);
+
+decode_inst: entity work.lxp32_decode(rtl)
+	port map(
+		clk_i=>clk_i,
+		rst_i=>rst_i,
+		
+		word_i=>fetch_word,
+		next_ip_i=>fetch_next_ip,
+		current_ip_i=>fetch_current_ip,
+		valid_i=>fetch_valid,
+		jump_valid_i=>execute_jump_valid,
+		ready_o=>decode_ready,
+		
+		interrupt_valid_i=>interrupt_valid,
+		interrupt_vector_i=>interrupt_vector,
+		interrupt_ready_o=>interrupt_ready,
+
+		wakeup_i=>interrupt_wakeup,
+		
+		sp_raddr1_o=>sp_raddr1,
+		sp_rdata1_i=>sp_rdata1,
+		sp_raddr2_o=>sp_raddr2,
+		sp_rdata2_i=>sp_rdata2,
+		
+		ready_i=>execute_ready,
+		valid_o=>decode_valid,
+		
+		cmd_loadop3_o=>decode_cmd_loadop3,
+		cmd_signed_o=>decode_cmd_signed,
+		cmd_dbus_o=>decode_cmd_dbus,
+		cmd_dbus_store_o=>decode_cmd_dbus_store,
+		cmd_dbus_byte_o=>decode_cmd_dbus_byte,
+		cmd_addsub_o=>decode_cmd_addsub,
+		cmd_mul_o=>decode_cmd_mul,
+		cmd_div_o=>decode_cmd_div,
+		cmd_div_mod_o=>decode_cmd_div_mod,
+		cmd_cmp_o=>decode_cmd_cmp,
+		cmd_jump_o=>decode_cmd_jump,
+		cmd_negate_op2_o=>decode_cmd_negate_op2,
+		cmd_and_o=>decode_cmd_and,
+		cmd_xor_o=>decode_cmd_xor,
+		cmd_shift_o=>decode_cmd_shift,
+		cmd_shift_right_o=>decode_cmd_shift_right,
+		
+		jump_type_o=>decode_jump_type,
+		
+		op1_o=>decode_op1,
+		op2_o=>decode_op2,
+		op3_o=>decode_op3,
+		dst_o=>decode_dst
+	);
+
+execute_inst: entity work.lxp32_execute(rtl)
+	generic map(
+		DBUS_RMW=>DBUS_RMW,
+		DIVIDER_EN=>DIVIDER_EN,
+		MUL_ARCH=>MUL_ARCH
+	)
+	port map(
+		clk_i=>clk_i,
+		rst_i=>rst_i,
+		
+		cmd_loadop3_i=>decode_cmd_loadop3,
+		cmd_signed_i=>decode_cmd_signed,
+		cmd_dbus_i=>decode_cmd_dbus,
+		cmd_dbus_store_i=>decode_cmd_dbus_store,
+		cmd_dbus_byte_i=>decode_cmd_dbus_byte,
+		cmd_addsub_i=>decode_cmd_addsub,
+		cmd_mul_i=>decode_cmd_mul,
+		cmd_div_i=>decode_cmd_div,
+		cmd_div_mod_i=>decode_cmd_div_mod,
+		cmd_cmp_i=>decode_cmd_cmp,
+		cmd_jump_i=>decode_cmd_jump,
+		cmd_negate_op2_i=>decode_cmd_negate_op2,
+		cmd_and_i=>decode_cmd_and,
+		cmd_xor_i=>decode_cmd_xor,
+		cmd_shift_i=>decode_cmd_shift,
+		cmd_shift_right_i=>decode_cmd_shift_right,
+		
+		jump_type_i=>decode_jump_type,
+		
+		op1_i=>decode_op1,
+		op2_i=>decode_op2,
+		op3_i=>decode_op3,
+		dst_i=>decode_dst,
+		
+		sp_waddr_o=>sp_waddr,
+		sp_we_o=>sp_we,
+		sp_wdata_o=>sp_wdata,
+		
+		valid_i=>decode_valid,
+		ready_o=>execute_ready,
+		
+		dbus_cyc_o=>dbus_cyc_o,
+		dbus_stb_o=>dbus_stb_o,
+		dbus_we_o=>dbus_we_o,
+		dbus_sel_o=>dbus_sel_o,
+		dbus_ack_i=>dbus_ack_i,
+		dbus_adr_o=>dbus_adr_o,
+		dbus_dat_o=>dbus_dat_o,
+		dbus_dat_i=>dbus_dat_i,
+		
+		jump_valid_o=>execute_jump_valid,
+		jump_dst_o=>execute_jump_dst,
+		jump_ready_i=>fetch_jump_ready,
+		
+		interrupt_return_o=>interrupt_return
+	);
+
+scratchpad_inst: entity work.lxp32_scratchpad(rtl)
+	port map(
+		clk_i=>clk_i,
+		
+		raddr1_i=>sp_raddr1,
+		rdata1_o=>sp_rdata1,
+		raddr2_i=>sp_raddr2,
+		rdata2_o=>sp_rdata2,
+		
+		waddr_i=>sp_waddr,
+		we_i=>sp_we,
+		wdata_i=>sp_wdata
+	);
+
+interrupt_mux_inst: entity work.lxp32_interrupt_mux(rtl)
+	port map(
+		clk_i=>clk_i,
+		rst_i=>rst_i,
+		
+		irq_i=>irq_i,
+		
+		interrupt_valid_o=>interrupt_valid,
+		interrupt_vector_o=>interrupt_vector,
+		interrupt_ready_i=>interrupt_ready,
+		interrupt_return_i=>interrupt_return,
+
+		wakeup_o=>interrupt_wakeup,
+		
+		sp_waddr_i=>sp_waddr,
+		sp_we_i=>sp_we,
+		sp_wdata_i=>sp_wdata
+	);
+
+end architecture;
+"
+"# VHDL Analysis for 'lxp32_dbus.vhd'
+
+## File Comments
+- -------------------------------------------------------------------
+- DBUS master
+- Part of the LXP32 CPU
+- Copyright (c) 2016 by Alex I. Kuznetsov
+- Manages data bus (DBUS) access.
+- -------------------------------------------------------------------
+- synthesis translate_off
+- synthesis translate_on
+
+## Libraries and Packages
+- Library: ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+
+## Entity: lxp32_dbus
+
+## Architecture: rtl of lxp32_dbus
+
+### Signals
+- strobe: std_logic:='0'
+- we_out: std_logic:='0'
+- we: std_logic
+- byte_mode: std_logic
+- sel: std_logic_vector(3 downto 0)
+- sig: std_logic
+- rmw_mode: std_logic
+- dbus_rdata: std_logic_vector(31 downto 0)
+- selected_byte: std_logic_vector(7 downto 0)
+
+### Processes
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: clk_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) with sensitivity list: clk_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+
+## Functional Analysis
+
+- Uses reset signal(s): rst_i
+- Implements interface or communication protocol
+- This appears to be a CPU component
+
+## Code Metrics
+- Line count: 172
+- Process count: 4
+- Signal count: 9
+
+## Summary
+- This module appears to be a general-purpose digital logic implementation.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'lxp32_dbus.vhd' plays a specific role in the overall CPU architecture.
+","---------------------------------------------------------------------
+-- DBUS master
+--
+-- Part of the LXP32 CPU
+--
+-- Copyright (c) 2016 by Alex I. Kuznetsov
+--
+-- Manages data bus (DBUS) access.
+---------------------------------------------------------------------
+
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+
+entity lxp32_dbus is
+	generic(
+		RMW: boolean
+	);
+	port(
+		clk_i: in std_logic;
+		rst_i: in std_logic;
+		
+		valid_i: in std_logic;
+		
+		cmd_dbus_i: in std_logic;
+		cmd_dbus_store_i: in std_logic;
+		cmd_dbus_byte_i: in std_logic;
+		cmd_signed_i: in std_logic;
+		addr_i: in std_logic_vector(31 downto 0);
+		wdata_i: in std_logic_vector(31 downto 0);
+		
+		rdata_o: out std_logic_vector(31 downto 0);
+		we_o: out std_logic;
+		busy_o: out std_logic;
+		
+		dbus_cyc_o: out std_logic;
+		dbus_stb_o: out std_logic;
+		dbus_we_o: out std_logic;
+		dbus_sel_o: out std_logic_vector(3 downto 0);
+		dbus_ack_i: in std_logic;
+		dbus_adr_o: out std_logic_vector(31 downto 2);
+		dbus_dat_o: out std_logic_vector(31 downto 0);
+		dbus_dat_i: in std_logic_vector(31 downto 0)
+	);
+end entity;
+
+architecture rtl of lxp32_dbus is
+
+signal strobe: std_logic:='0';
+signal we_out: std_logic:='0';
+signal we: std_logic;
+signal byte_mode: std_logic;
+signal sel: std_logic_vector(3 downto 0);
+signal sig: std_logic;
+signal rmw_mode: std_logic;
+
+signal dbus_rdata: std_logic_vector(31 downto 0);
+signal selected_byte: std_logic_vector(7 downto 0);
+
+begin
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		if rst_i='1' then
+			we_out<='0';
+			strobe<='0';
+			sig<='-';
+			byte_mode<='-';
+			sel<=(others=>'-');
+			we<='-';
+			rmw_mode<='-';
+			dbus_adr_o<=(others=>'-');
+			dbus_dat_o<=(others=>'-');
+		else
+			we_out<='0';
+			if strobe='0' then
+				if valid_i='1' and cmd_dbus_i='1' then
+					strobe<='1';
+					sig<=cmd_signed_i;
+					
+					dbus_adr_o<=addr_i(31 downto 2);
+					
+					if cmd_dbus_byte_i='0' then
+						byte_mode<='0';
+						dbus_dat_o<=wdata_i;
+						sel<=""1111"";
+						
+						-- synthesis translate_off
+						assert addr_i(1 downto 0)=""00""
+							report ""Misaligned word-granular access on data bus""
+							severity warning;
+						-- synthesis translate_on
+					else
+						byte_mode<='1';
+						dbus_dat_o<=wdata_i(7 downto 0)&wdata_i(7 downto 0)&
+							wdata_i(7 downto 0)&wdata_i(7 downto 0);
+						
+						case addr_i(1 downto 0) is
+						when ""00"" => sel<=""0001"";
+						when ""01"" => sel<=""0010"";
+						when ""10"" => sel<=""0100"";
+						when ""11"" => sel<=""1000"";
+						when others =>
+						end case;
+					end if;
+					
+					if not RMW then
+						we<=cmd_dbus_store_i;
+						rmw_mode<='0';
+					else
+						we<=cmd_dbus_store_i and not cmd_dbus_byte_i;
+						rmw_mode<=cmd_dbus_store_i and cmd_dbus_byte_i;
+					end if;
+				end if;
+			else
+				if dbus_ack_i='1' then
+					if rmw_mode='1' and we='0' and RMW then
+						we<='1';
+						for i in sel'range loop
+							if sel(i)='0' then
+								dbus_dat_o(i*8+7 downto i*8)<=
+									dbus_dat_i(i*8+7 downto i*8);
+							end if;
+						end loop;
+					else
+						strobe<='0';
+						if we='0' then
+							we_out<='1';
+						end if;
+					end if;
+				end if;
+			end if;
+		end if;
+	end if;
+end process;
+
+dbus_cyc_o<=strobe;
+dbus_stb_o<=strobe;
+dbus_we_o<=we;
+
+sel_no_rmw_gen: if not RMW generate
+	dbus_sel_o<=sel;
+end generate;
+
+sel_rmw_gen: if RMW generate
+	dbus_sel_o<=(others=>'1');
+end generate;
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		dbus_rdata<=dbus_dat_i;
+	end if;
+end process;
+
+selected_byte_gen: for i in selected_byte'range generate
+	selected_byte(i)<=(dbus_rdata(i) and sel(0)) or
+		(dbus_rdata(i+8) and sel(1)) or
+		(dbus_rdata(i+16) and sel(2)) or
+		(dbus_rdata(i+24) and sel(3));
+end generate;
+
+rdata_o<=dbus_rdata when byte_mode='0' else
+	X""000000""&selected_byte when selected_byte(selected_byte'high)='0' or sig='0' else
+	X""FFFFFF""&selected_byte;
+
+we_o<=we_out;
+busy_o<=strobe or we_out;
+
+end architecture;
+"
+"# VHDL Analysis for 'lxp32_decode.vhd'
+
+## File Comments
+- -------------------------------------------------------------------
+- Instruction decoder
+- Part of the LXP32 CPU
+- Copyright (c) 2016 by Alex I. Kuznetsov
+- The second stage of the LXP32 pipeline.
+- -------------------------------------------------------------------
+- Decoder FSM state
+- Input instruction portions
+- Signals related to pipeline control
+- Signals related to RD operand decoding
+- Plus 11 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+
+## Entity: lxp32_decode
+
+## Architecture: rtl of lxp32_decode
+
+### Signals
+- state: DecoderState:=Regular
+- opcode: std_logic_vector(5 downto 0)
+- t1: std_logic
+- t2: std_logic
+- destination: std_logic_vector(7 downto 0)
+- rd1: std_logic_vector(7 downto 0)
+- rd2: std_logic_vector(7 downto 0)
+- downstream_busy: std_logic
+- self_busy: std_logic:='0'
+- busy: std_logic
+- valid_out: std_logic:='0'
+- dst_out: std_logic_vector(7 downto 0)
+- rd1_reg: std_logic_vector(7 downto 0)
+- rd2_reg: std_logic_vector(7 downto 0)
+- rd1_select: std_logic
+- rd1_direct: std_logic_vector(31 downto 0)
+- rd2_select: std_logic
+- rd2_direct: std_logic_vector(31 downto 0)
+- interrupt_ready: std_logic:='0'
+- wakeup_reg: std_logic:='0'
+
+### Processes
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: clk_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) with sensitivity list: clk_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+
+## Functional Analysis
+
+- This appears to be a Finite State Machine implementation
+- Uses reset signal(s): DecoderState, rst_i
+- Implements control logic
+- May be part of a pipeline architecture
+- This appears to be a CPU component
+- Implements instruction decoding functionality
+
+## Code Metrics
+- Line count: 334
+- Process count: 4
+- Signal count: 20
+
+## Summary
+- This module implements control logic.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'lxp32_decode.vhd' plays a specific role in the overall CPU architecture.
+","---------------------------------------------------------------------
+-- Instruction decoder
+--
+-- Part of the LXP32 CPU
+--
+-- Copyright (c) 2016 by Alex I. Kuznetsov
+--
+-- The second stage of the LXP32 pipeline.
+---------------------------------------------------------------------
+
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+
+entity lxp32_decode is
+	port(
+		clk_i: in std_logic;
+		rst_i: in std_logic;
+		
+		word_i: in std_logic_vector(31 downto 0);
+		next_ip_i: in std_logic_vector(29 downto 0);
+		current_ip_i: in std_logic_vector(29 downto 0);
+		valid_i: in std_logic;
+		jump_valid_i: in std_logic;
+		ready_o: out std_logic;
+		
+		interrupt_valid_i: in std_logic;
+		interrupt_vector_i: in std_logic_vector(2 downto 0);
+		interrupt_ready_o: out std_logic;
+
+		wakeup_i: in std_logic;
+		
+		sp_raddr1_o: out std_logic_vector(7 downto 0);
+		sp_rdata1_i: in std_logic_vector(31 downto 0);
+		sp_raddr2_o: out std_logic_vector(7 downto 0);
+		sp_rdata2_i: in std_logic_vector(31 downto 0);
+		
+		ready_i: in std_logic;
+		valid_o: out std_logic;
+		
+		cmd_loadop3_o: out std_logic;
+		cmd_signed_o: out std_logic;
+		cmd_dbus_o: out std_logic;
+		cmd_dbus_store_o: out std_logic;
+		cmd_dbus_byte_o: out std_logic;
+		cmd_addsub_o: out std_logic;
+		cmd_mul_o: out std_logic;
+		cmd_div_o: out std_logic;
+		cmd_div_mod_o: out std_logic;
+		cmd_cmp_o: out std_logic;
+		cmd_jump_o: out std_logic;
+		cmd_negate_op2_o: out std_logic;
+		cmd_and_o: out std_logic;
+		cmd_xor_o: out std_logic;
+		cmd_shift_o: out std_logic;
+		cmd_shift_right_o: out std_logic;
+		
+		jump_type_o: out std_logic_vector(3 downto 0);
+		
+		op1_o: out std_logic_vector(31 downto 0);
+		op2_o: out std_logic_vector(31 downto 0);
+		op3_o: out std_logic_vector(31 downto 0);
+		dst_o: out std_logic_vector(7 downto 0)
+	);
+end entity;
+
+architecture rtl of lxp32_decode is
+
+-- Decoder FSM state
+
+type DecoderState is (Regular,ContinueLc,ContinueCjmp,ContinueInterrupt,Halt);
+signal state: DecoderState:=Regular;
+
+-- Input instruction portions
+
+signal opcode: std_logic_vector(5 downto 0);
+signal t1: std_logic;
+signal t2: std_logic;
+signal destination: std_logic_vector(7 downto 0);
+signal rd1: std_logic_vector(7 downto 0);
+signal rd2: std_logic_vector(7 downto 0);
+
+-- Signals related to pipeline control
+
+signal downstream_busy: std_logic;
+signal self_busy: std_logic:='0';
+signal busy: std_logic;
+signal valid_out: std_logic:='0';
+
+signal dst_out: std_logic_vector(7 downto 0);
+
+-- Signals related to RD operand decoding
+
+signal rd1_reg: std_logic_vector(7 downto 0);
+signal rd2_reg: std_logic_vector(7 downto 0);
+
+signal rd1_select: std_logic;
+signal rd1_direct: std_logic_vector(31 downto 0);
+signal rd2_select: std_logic;
+signal rd2_direct: std_logic_vector(31 downto 0);
+
+-- Signals related to interrupt handling
+
+signal interrupt_ready: std_logic:='0';
+signal wakeup_reg: std_logic:='0';
+
+begin
+
+-- Dissect input word
+
+opcode<=word_i(31 downto 26);
+t1<=word_i(25);
+t2<=word_i(24);
+destination<=word_i(23 downto 16);
+rd1<=word_i(15 downto 8);
+rd2<=word_i(7 downto 0);
+
+-- Pipeline control
+
+downstream_busy<=valid_out and not ready_i;
+busy<=downstream_busy or self_busy;
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		if rst_i='1' then
+			valid_out<='0';
+			self_busy<='0';
+			state<=Regular;
+			interrupt_ready<='0';
+			cmd_loadop3_o<='-';
+			cmd_signed_o<='-';
+			cmd_dbus_o<='-';
+			cmd_dbus_store_o<='-';
+			cmd_dbus_byte_o<='-';
+			cmd_addsub_o<='-';
+			cmd_negate_op2_o<='-';
+			cmd_mul_o<='-';
+			cmd_div_o<='-';
+			cmd_div_mod_o<='-';
+			cmd_cmp_o<='-';
+			cmd_jump_o<='-';
+			cmd_and_o<='-';
+			cmd_xor_o<='-';
+			cmd_shift_o<='-';
+			cmd_shift_right_o<='-';
+			rd1_select<='-';
+			rd1_direct<=(others=>'-');
+			rd2_select<='-';
+			rd2_direct<=(others=>'-');
+			op3_o<=(others=>'-');
+			jump_type_o<=(others=>'-');
+			dst_out<=(others=>'-');
+			wakeup_reg<='0';
+		else
+			interrupt_ready<='0';
+			wakeup_reg<=wakeup_reg or wakeup_i;
+			if jump_valid_i='1' then
+				valid_out<='0';
+				self_busy<='0';
+				state<=Regular;
+			elsif downstream_busy='0' then
+				op3_o<=(others=>'-');
+				rd1_direct<=std_logic_vector(resize(signed(rd1),rd1_direct'length));
+				rd2_direct<=std_logic_vector(resize(signed(rd2),rd2_direct'length));
+				
+				cmd_signed_o<=opcode(0);
+				cmd_div_mod_o<=opcode(1);
+				cmd_shift_right_o<=opcode(1);
+				cmd_dbus_byte_o<=opcode(1);
+				cmd_dbus_store_o<=opcode(2);
+				
+				case state is
+				when Regular =>
+					cmd_loadop3_o<='0';
+					cmd_dbus_o<='0';
+					cmd_addsub_o<='0';
+					cmd_negate_op2_o<='0';
+					cmd_mul_o<='0';
+					cmd_div_o<='0';
+					cmd_cmp_o<='0';
+					cmd_jump_o<='0';
+					cmd_and_o<='0';
+					cmd_xor_o<='0';
+					cmd_shift_o<='0';
+					
+					jump_type_o<=opcode(3 downto 0);
+					
+					if interrupt_valid_i='1' and valid_i='1' then
+						cmd_jump_o<='1';
+						cmd_loadop3_o<='1';
+						op3_o<=current_ip_i&""01""; -- LSB indicates interrupt return
+						dst_out<=X""FD""; -- interrupt return pointer
+						rd1_select<='1';
+						rd2_select<='0';
+						valid_out<='1';
+						interrupt_ready<='1';
+						self_busy<='1';
+						state<=ContinueInterrupt;
+					else
+						if opcode(5 downto 3)=""101"" or opcode=""000001"" then -- lc or lcs
+							cmd_loadop3_o<='1';
+-- Setting op3_o here only affects the lcs instruction
+							op3_o<=std_logic_vector(resize(signed(opcode(2 downto 0)&
+								t1&t2&rd1&rd2),op3_o'length));
+						end if;
+						
+						if opcode(5 downto 3)=""001"" then
+							cmd_dbus_o<='1';
+						end if;
+						
+						if opcode(5 downto 1)=""01000"" then
+							cmd_addsub_o<='1';
+						end if;
+						
+						cmd_negate_op2_o<=opcode(0);
+						
+						if opcode=""010010"" then
+							cmd_mul_o<='1';
+						end if;
+						
+						if opcode(5 downto 2)=""0101"" then
+							cmd_div_o<='1';
+						end if;
+						
+						if opcode(5 downto 3)=""100"" then -- jump or call
+							cmd_jump_o<='1';
+							cmd_loadop3_o<=opcode(0);
+-- Setting op3_o here only affects the call instruction
+							op3_o<=next_ip_i&""00"";
+						end if;
+						
+						-- Note: (a or b) = (a and b) or (a xor b)
+						
+						if opcode(5 downto 1)=""01100"" then
+							cmd_and_o<='1';
+						end if;
+						
+						if opcode=""011010"" or opcode=""011001"" then
+							cmd_xor_o<='1';
+						end if;
+						
+						if opcode(5 downto 2)=""0111"" then
+							cmd_shift_o<='1';
+						end if;
+						
+						if opcode(5 downto 4)=""11"" then
+							cmd_cmp_o<='1';
+							cmd_negate_op2_o<='1';
+						end if;
+						
+						rd1_select<=t1;
+						rd2_select<=t2;
+						
+						dst_out<=destination;
+						
+						if valid_i='1' then
+							if opcode=""000001"" then
+								valid_out<='0';
+								self_busy<='0';
+								state<=ContinueLc;
+							elsif opcode=""000010"" then
+								valid_out<='0';
+								self_busy<='1';
+								wakeup_reg<='0';
+								state<=Halt;
+							elsif opcode(5 downto 4)=""11"" then
+								valid_out<='1';
+								self_busy<='1';
+								state<=ContinueCjmp;
+							else
+								valid_out<='1';
+							end if;
+						else
+							valid_out<='0';
+						end if;
+					end if;
+				when ContinueLc =>
+					if valid_i='1' then
+						valid_out<='1';
+						op3_o<=word_i;
+						self_busy<='0';
+						state<=Regular;
+					end if;
+				when ContinueCjmp =>
+					valid_out<='1';
+					cmd_jump_o<='1';
+					rd1_select<='1';
+					self_busy<='0';
+					state<=Regular;
+				when ContinueInterrupt =>
+					valid_out<='0';
+				when Halt =>
+					if interrupt_valid_i='1' or wakeup_i='1' or wakeup_reg='1' then
+						self_busy<='0';
+						state<=Regular;
+					end if;
+				end case;
+			end if;
+		end if;
+	end if;
+end process;
+
+valid_o<=valid_out;
+dst_o<=dst_out;
+
+ready_o<=not busy;
+
+interrupt_ready_o<=interrupt_ready;
+
+-- Decode RD (register/direct) operands
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		if busy='0' then
+			rd1_reg<=rd1;
+			rd2_reg<=rd2;
+		end if;
+	end if;
+end process;
+
+sp_raddr1_o<=""11110""&interrupt_vector_i when (state=Regular and interrupt_valid_i='1' and downstream_busy='0') or state=ContinueInterrupt else
+	dst_out when (state=ContinueCjmp and downstream_busy='0') else
+	rd1_reg when busy='1' else
+	rd1;
+
+sp_raddr2_o<=rd2_reg when busy='1' else rd2;
+
+op1_o<=sp_rdata1_i when rd1_select='1' else rd1_direct;
+op2_o<=sp_rdata2_i when rd2_select='1' else rd2_direct;
+
+end architecture;
+"
+"# VHDL Analysis for 'lxp32_divider.vhd'
+
+## File Comments
+- -------------------------------------------------------------------
+- Divider
+- Part of the LXP32 CPU
+- Copyright (c) 2016 by Alex I. Kuznetsov
+- Based on the NRD (Non Restoring Division) algorithm. Takes
+- 36 cycles to calculate quotient (37 for remainder).
+- -------------------------------------------------------------------
+- Complementor signals
+- Divider FSM signals
+- Output restoration signals
+- Plus 3 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+
+## Entity: lxp32_divider
+
+## Architecture: rtl of lxp32_divider
+
+### Signals
+- compl_inv: std_logic
+- compl_mux: std_logic_vector(31 downto 0)
+- compl_out: std_logic_vector(31 downto 0)
+- inv_res: std_logic
+- fsm_ce: std_logic:='0'
+- dividend: unsigned(31 downto 0)
+- divisor: unsigned(32 downto 0)
+- want_remainder: std_logic
+- partial_remainder: unsigned(32 downto 0)
+- addend: unsigned(32 downto 0)
+- sum: unsigned(32 downto 0)
+- sum_positive: std_logic
+- sum_subtract: std_logic
+- cnt: integer range 0 to 34:=0
+- ceo: std_logic:='0'
+- remainder_corrector: unsigned(31 downto 0)
+- remainder_corrector_1: std_logic
+- remainder_pos: unsigned(31 downto 0)
+- result_pos: unsigned(31 downto 0)
+
+### Processes
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: clk_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: clk_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) with sensitivity list: clk_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+
+## Functional Analysis
+
+- Uses reset signal(s): rst_i
+- Implements control logic
+- This appears to be a CPU component
+
+## Code Metrics
+- Line count: 173
+- Process count: 6
+- Signal count: 19
+
+## Summary
+- This module appears to be a general-purpose digital logic implementation.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'lxp32_divider.vhd' plays a specific role in the overall CPU architecture.
+","---------------------------------------------------------------------
+-- Divider
+--
+-- Part of the LXP32 CPU
+--
+-- Copyright (c) 2016 by Alex I. Kuznetsov
+--
+-- Based on the NRD (Non Restoring Division) algorithm. Takes
+-- 36 cycles to calculate quotient (37 for remainder).
+---------------------------------------------------------------------
+
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+
+entity lxp32_divider is
+	port(
+		clk_i: in std_logic;
+		rst_i: in std_logic;
+		ce_i: in std_logic;
+		op1_i: in std_logic_vector(31 downto 0);
+		op2_i: in std_logic_vector(31 downto 0);
+		signed_i: in std_logic;
+		rem_i: in std_logic;
+		ce_o: out std_logic;
+		result_o: out std_logic_vector(31 downto 0)
+	);
+end entity;
+
+architecture rtl of lxp32_divider is
+
+-- Complementor signals
+
+signal compl_inv: std_logic;
+signal compl_mux: std_logic_vector(31 downto 0);
+signal compl_out: std_logic_vector(31 downto 0);
+
+signal inv_res: std_logic;
+
+-- Divider FSM signals
+
+signal fsm_ce: std_logic:='0';
+
+signal dividend: unsigned(31 downto 0);
+signal divisor: unsigned(32 downto 0);
+signal want_remainder: std_logic;
+
+signal partial_remainder: unsigned(32 downto 0);
+signal addend: unsigned(32 downto 0);
+signal sum: unsigned(32 downto 0);
+signal sum_positive: std_logic;
+signal sum_subtract: std_logic;
+
+signal cnt: integer range 0 to 34:=0;
+
+signal ceo: std_logic:='0';
+
+-- Output restoration signals
+
+signal remainder_corrector: unsigned(31 downto 0);
+signal remainder_corrector_1: std_logic;
+signal remainder_pos: unsigned(31 downto 0);
+signal result_pos: unsigned(31 downto 0);
+
+begin
+
+compl_inv<=op1_i(31) and signed_i when ce_i='1' else inv_res;
+compl_mux<=op1_i when ce_i='1' else std_logic_vector(result_pos);
+
+compl_op1_inst: entity work.lxp32_compl(rtl)
+	port map(
+		clk_i=>clk_i,
+		compl_i=>compl_inv,
+		d_i=>compl_mux,
+		d_o=>compl_out
+	);
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		if rst_i='1' then
+			fsm_ce<='0';
+			want_remainder<='-';
+			inv_res<='-';
+		else
+			fsm_ce<=ce_i;
+			if ce_i='1' then
+				want_remainder<=rem_i;
+				if rem_i='1' then
+					inv_res<=op1_i(31) and signed_i;
+				else
+					inv_res<=(op1_i(31) xor op2_i(31)) and signed_i;
+				end if;
+			end if;
+		end if;
+	end if;
+end process;
+
+-- Main adder/subtractor
+
+addend_gen: for i in addend'range generate
+	addend(i)<=divisor(i) xor sum_subtract;
+end generate;
+
+sum<=partial_remainder+addend+(to_unsigned(0,32)&sum_subtract);
+sum_positive<=not sum(32);
+
+-- Divider state machine
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		if rst_i='1' then
+			cnt<=0;
+			ceo<='0';
+			divisor<=(others=>'-');
+			dividend<=(others=>'-');
+			partial_remainder<=(others=>'-');
+			sum_subtract<='-';
+		else
+			if cnt=1 then
+				ceo<='1';
+			else
+				ceo<='0';
+			end if;
+			
+			if ce_i='1' then
+				divisor(31 downto 0)<=unsigned(op2_i);
+				divisor(32)<=op2_i(31) and signed_i;
+			end if;
+			
+			if fsm_ce='1' then
+				dividend<=unsigned(compl_out(30 downto 0)&""0"");
+				partial_remainder<=to_unsigned(0,32)&compl_out(31);
+				sum_subtract<=not divisor(32);
+				if want_remainder='1' then
+					cnt<=34;
+				else
+					cnt<=33;
+				end if;
+			else
+				partial_remainder<=sum(31 downto 0)&dividend(31);
+				sum_subtract<=sum_positive xor divisor(32);
+				dividend<=dividend(30 downto 0)&sum_positive;
+				if cnt>0 then
+					cnt<=cnt-1;
+				end if;
+			end if;
+		end if;
+	end if;
+end process;
+
+-- Output restoration circuit
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		for i in remainder_corrector'range loop
+			remainder_corrector(i)<=(divisor(i) xor divisor(32)) and not sum_positive;
+		end loop;
+		remainder_corrector_1<=divisor(32) and not sum_positive;
+		remainder_pos<=partial_remainder(32 downto 1)+remainder_corrector+
+			(to_unsigned(0,31)&remainder_corrector_1);
+	end if;
+end process;
+
+result_pos<=remainder_pos when want_remainder='1' else dividend;
+
+result_o<=compl_out;
+ce_o<=ceo;
+
+end architecture;
+"
+"# VHDL Analysis for 'lxp32_execute.vhd'
+
+## File Comments
+- -------------------------------------------------------------------
+- Execution unit
+- Part of the LXP32 CPU
+- Copyright (c) 2016 by Alex I. Kuznetsov
+- The third stage of the LXP32 pipeline.
+- -------------------------------------------------------------------
+- Pipeline control signals
+- ALU signals
+- OP3 loader signals
+- Jump machine signals
+- Plus 10 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Use: ieee.std_logic_1164.all
+
+## Entity: lxp32_execute
+
+## Architecture: rtl of lxp32_execute
+
+### Signals
+- busy: std_logic
+- can_execute: std_logic
+- alu_result: std_logic_vector(31 downto 0)
+- alu_we: std_logic
+- alu_busy: std_logic
+- alu_cmp_eq: std_logic
+- alu_cmp_ug: std_logic
+- alu_cmp_sg: std_logic
+- loadop3_we: std_logic
+- jump_condition: std_logic
+- jump_valid: std_logic:='0'
+- jump_dst: std_logic_vector(jump_dst_o'range)
+- dbus_result: std_logic_vector(31 downto 0)
+- dbus_busy: std_logic
+- dbus_we: std_logic
+- result_mux: std_logic_vector(31 downto 0)
+- result_valid: std_logic
+- result_regaddr: std_logic_vector(7 downto 0)
+- dst_reg: std_logic_vector(7 downto 0)
+- interrupt_return: std_logic:='0'
+
+### Processes
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: clk_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) with sensitivity list: clk_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+
+## Functional Analysis
+
+- Uses reset signal(s): rst_i
+- Implements arithmetic/computational functionality
+- Implements control logic
+- May be part of a pipeline architecture
+- This appears to be a CPU component
+
+## Code Metrics
+- Line count: 261
+- Process count: 4
+- Signal count: 20
+
+## Summary
+- This module implements arithmetic and logic operations.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'lxp32_execute.vhd' plays a specific role in the overall CPU architecture.
+","---------------------------------------------------------------------
+-- Execution unit
+--
+-- Part of the LXP32 CPU
+--
+-- Copyright (c) 2016 by Alex I. Kuznetsov
+--
+-- The third stage of the LXP32 pipeline.
+---------------------------------------------------------------------
+
+library ieee;
+use ieee.std_logic_1164.all;
+
+entity lxp32_execute is
+	generic(
+		DBUS_RMW: boolean;
+		DIVIDER_EN: boolean;
+		MUL_ARCH: string
+	);
+	port(
+		clk_i: in std_logic;
+		rst_i: in std_logic;
+		
+		cmd_loadop3_i: in std_logic;
+		cmd_signed_i: in std_logic;
+		cmd_dbus_i: in std_logic;
+		cmd_dbus_store_i: in std_logic;
+		cmd_dbus_byte_i: in std_logic;
+		cmd_addsub_i: in std_logic;
+		cmd_mul_i: in std_logic;
+		cmd_div_i: in std_logic;
+		cmd_div_mod_i: in std_logic;
+		cmd_cmp_i: in std_logic;
+		cmd_jump_i: in std_logic;
+		cmd_negate_op2_i: in std_logic;
+		cmd_and_i: in std_logic;
+		cmd_xor_i: in std_logic;
+		cmd_shift_i: in std_logic;
+		cmd_shift_right_i: in std_logic;
+		
+		jump_type_i: in std_logic_vector(3 downto 0);
+		
+		op1_i: in std_logic_vector(31 downto 0);
+		op2_i: in std_logic_vector(31 downto 0);
+		op3_i: in std_logic_vector(31 downto 0);
+		dst_i: in std_logic_vector(7 downto 0);
+		
+		sp_waddr_o: out std_logic_vector(7 downto 0);
+		sp_we_o: out std_logic;
+		sp_wdata_o: out std_logic_vector(31 downto 0);
+		
+		valid_i: in std_logic;
+		ready_o: out std_logic;
+		
+		dbus_cyc_o: out std_logic;
+		dbus_stb_o: out std_logic;
+		dbus_we_o: out std_logic;
+		dbus_sel_o: out std_logic_vector(3 downto 0);
+		dbus_ack_i: in std_logic;
+		dbus_adr_o: out std_logic_vector(31 downto 2);
+		dbus_dat_o: out std_logic_vector(31 downto 0);
+		dbus_dat_i: in std_logic_vector(31 downto 0);
+		
+		jump_valid_o: out std_logic;
+		jump_dst_o: out std_logic_vector(29 downto 0);
+		jump_ready_i: in std_logic;
+		
+		interrupt_return_o: out std_logic
+	);
+end entity;
+
+architecture rtl of lxp32_execute is
+
+-- Pipeline control signals
+
+signal busy: std_logic;
+signal can_execute: std_logic;
+
+-- ALU signals
+
+signal alu_result: std_logic_vector(31 downto 0);
+signal alu_we: std_logic;
+signal alu_busy: std_logic;
+
+signal alu_cmp_eq: std_logic;
+signal alu_cmp_ug: std_logic;
+signal alu_cmp_sg: std_logic;
+
+-- OP3 loader signals
+
+signal loadop3_we: std_logic;
+
+-- Jump machine signals
+
+signal jump_condition: std_logic;
+signal jump_valid: std_logic:='0';
+signal jump_dst: std_logic_vector(jump_dst_o'range);
+
+-- DBUS signals
+
+signal dbus_result: std_logic_vector(31 downto 0);
+signal dbus_busy: std_logic;
+signal dbus_we: std_logic;
+
+-- Result mux signals
+
+signal result_mux: std_logic_vector(31 downto 0);
+signal result_valid: std_logic;
+signal result_regaddr: std_logic_vector(7 downto 0);
+
+signal dst_reg: std_logic_vector(7 downto 0);
+
+-- Signals related to interrupt handling
+
+signal interrupt_return: std_logic:='0';
+
+begin
+
+-- Pipeline control
+
+busy<=alu_busy or dbus_busy;
+ready_o<=not busy;
+can_execute<=valid_i and not busy;
+
+-- ALU
+
+alu_inst: entity work.lxp32_alu(rtl)
+	generic map(
+		DIVIDER_EN=>DIVIDER_EN,
+		MUL_ARCH=>MUL_ARCH
+	)
+	port map(
+		clk_i=>clk_i,
+		rst_i=>rst_i,
+		
+		valid_i=>can_execute,
+		
+		cmd_signed_i=>cmd_signed_i,
+		cmd_addsub_i=>cmd_addsub_i,
+		cmd_mul_i=>cmd_mul_i,
+		cmd_div_i=>cmd_div_i,
+		cmd_div_mod_i=>cmd_div_mod_i,
+		cmd_cmp_i=>cmd_cmp_i,
+		cmd_negate_op2_i=>cmd_negate_op2_i,
+		cmd_and_i=>cmd_and_i,
+		cmd_xor_i=>cmd_xor_i,
+		cmd_shift_i=>cmd_shift_i,
+		cmd_shift_right_i=>cmd_shift_right_i,
+		
+		op1_i=>op1_i,
+		op2_i=>op2_i,
+		
+		result_o=>alu_result,
+		
+		cmp_eq_o=>alu_cmp_eq,
+		cmp_ug_o=>alu_cmp_ug,
+		cmp_sg_o=>alu_cmp_sg,
+		
+		we_o=>alu_we,
+		busy_o=>alu_busy
+	);
+
+-- OP3 loader
+
+loadop3_we<=can_execute and cmd_loadop3_i;
+
+-- Jump logic
+
+jump_condition<=(not cmd_cmp_i) or (jump_type_i(3) and alu_cmp_eq) or
+	(jump_type_i(2) and not alu_cmp_eq) or (jump_type_i(1) and alu_cmp_ug) or
+	(jump_type_i(0) and alu_cmp_sg);
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		if rst_i='1' then
+			jump_valid<='0';
+			interrupt_return<='0';
+			jump_dst<=(others=>'-');
+		else
+			if jump_valid='0' then
+				jump_dst<=op1_i(31 downto 2);
+				if can_execute='1' and cmd_jump_i='1' and jump_condition='1' then
+					jump_valid<='1';
+					interrupt_return<=op1_i(0);
+				end if;
+			elsif jump_ready_i='1' then
+				jump_valid<='0';
+				interrupt_return<='0';
+			end if;
+		end if;
+	end if;
+end process;
+
+jump_valid_o<=jump_valid or (can_execute and cmd_jump_i and jump_condition);
+jump_dst_o<=jump_dst when jump_valid='1' else op1_i(31 downto 2);
+
+interrupt_return_o<=interrupt_return;
+
+-- DBUS access
+
+dbus_inst: entity work.lxp32_dbus(rtl)
+	generic map(
+		RMW=>DBUS_RMW
+	)
+	port map(
+		clk_i=>clk_i,
+		rst_i=>rst_i,
+		
+		valid_i=>can_execute,
+		
+		cmd_dbus_i=>cmd_dbus_i,
+		cmd_dbus_store_i=>cmd_dbus_store_i,
+		cmd_dbus_byte_i=>cmd_dbus_byte_i,
+		cmd_signed_i=>cmd_signed_i,
+		addr_i=>op1_i,
+		wdata_i=>op2_i,
+		
+		rdata_o=>dbus_result,
+		busy_o=>dbus_busy,
+		we_o=>dbus_we,
+		
+		dbus_cyc_o=>dbus_cyc_o,
+		dbus_stb_o=>dbus_stb_o,
+		dbus_we_o=>dbus_we_o,
+		dbus_sel_o=>dbus_sel_o,
+		dbus_ack_i=>dbus_ack_i,
+		dbus_adr_o=>dbus_adr_o,
+		dbus_dat_o=>dbus_dat_o,
+		dbus_dat_i=>dbus_dat_i
+	);
+
+-- Result multiplexer
+
+result_mux_gen: for i in result_mux'range generate
+	result_mux(i)<=(alu_result(i) and alu_we) or
+		(op3_i(i) and loadop3_we) or
+		(dbus_result(i) and dbus_we);
+end generate;
+
+result_valid<=alu_we or loadop3_we or dbus_we;
+
+-- Write destination register
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		if can_execute='1' then
+			dst_reg<=dst_i;
+		end if;
+	end if;
+end process;
+
+result_regaddr<=dst_i when can_execute='1' else dst_reg;
+
+sp_we_o<=result_valid;
+sp_waddr_o<=result_regaddr;
+sp_wdata_o<=result_mux;
+
+end architecture;
+"
+"# VHDL Analysis for 'lxp32_fetch.vhd'
+
+## File Comments
+- -------------------------------------------------------------------
+- Instruction fetch
+- Part of the LXP32 CPU
+- Copyright (c) 2016 by Alex I. Kuznetsov
+- The first stage of the LXP32 pipeline.
+- -------------------------------------------------------------------
+- INIT state machine (to initialize all registers)
+- All CPU registers are expected to be zero-initialized after reset.
+- Since these registers are implemented as a RAM block, we perform
+- the initialization sequentially by generating ""mov rN, 0"" instructions
+- Plus 30 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+- Use: when either the decoder or the IBUS
+-- stalls, the fetch_addr counter will also stop incrementing.
+				next_ip<=fetch_addr
+
+## Entity: lxp32_fetch
+
+## Architecture: rtl of lxp32_fetch
+
+### Signals
+- init: std_logic:='1'
+- init_cnt: unsigned(7 downto 0):=(others=>'0')
+- fetch_addr: std_logic_vector(29 downto 0):=START_ADDR(31 downto 2)
+- next_word: std_logic
+- suppress_re: std_logic:='0'
+- re: std_logic
+- requested: std_logic:='0'
+- fifo_rst: std_logic
+- fifo_we: std_logic
+- fifo_din: std_logic_vector(31 downto 0)
+- fifo_re: std_logic
+- fifo_dout: std_logic_vector(31 downto 0)
+- fifo_empty: std_logic
+- fifo_full: std_logic
+- jr: std_logic:='0'
+- next_ip: std_logic_vector(fetch_addr'range)
+- current_ip: std_logic_vector(fetch_addr'range)
+- is asserted.
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		if rst_i='1' then
+			init<='0';
+			init_cnt<=(others=>'0');
+		else
+			if init='0' and ready_i='1' then
+				init_cnt<=init_cnt+1;
+				if init_cnt=X""FF"" then
+					init<='1';
+				end if;
+			end if;
+		end if;
+	end if;
+end process;
+
+-- FETCH state machine
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		if rst_i='1' then
+			fetch_addr<=START_ADDR(31 downto 2);
+			requested<='0';
+			jr<='0';
+			suppress_re<='0';
+			next_ip<=(others=>'-');
+		else
+			jr<='0';
+-- Suppress LLI request if jump signal is active but will not be processed
+-- in this cycle. Helps to reduce jump latency with high-latency LLI slaves.
+-- Note: gating ""re"" with ""jump_valid_i and not jr"" asynchronously would
+-- reduce jump latency even more, but we really want to avoid too large
+-- clock-to-out on LLI outputs.
+			suppress_re<=jump_valid_i and not jr and not next_word
+
+### Processes
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: clk_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: clk_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: clk_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+
+## Functional Analysis
+
+- Contains 1 clock domain(s): clock
+- Uses reset signal(s): first, reset, fifo_rst, rst_i
+- Implements memory functionality
+- Implements control logic
+- May be part of a pipeline architecture
+- This appears to be a CPU component
+- Implements instruction decoding functionality
+- Implements instruction fetching functionality
+- Defines custom procedures: described, calls
+
+## Code Metrics
+- Line count: 227
+- Process count: 6
+- Signal count: 18
+
+## Summary
+- This appears to be a top-level module in the design.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'lxp32_fetch.vhd' plays a specific role in the overall CPU architecture.
+","---------------------------------------------------------------------
+-- Instruction fetch
+--
+-- Part of the LXP32 CPU
+--
+-- Copyright (c) 2016 by Alex I. Kuznetsov
+--
+-- The first stage of the LXP32 pipeline.
+---------------------------------------------------------------------
+
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+
+entity lxp32_fetch is
+	generic(
+		START_ADDR: std_logic_vector(31 downto 0)
+	);
+	port(
+		clk_i: in std_logic;
+		rst_i: in std_logic;
+		
+		lli_re_o: out std_logic;
+		lli_adr_o: out std_logic_vector(29 downto 0);
+		lli_dat_i: in std_logic_vector(31 downto 0);
+		lli_busy_i: in std_logic;
+		
+		word_o: out std_logic_vector(31 downto 0);
+		current_ip_o: out std_logic_vector(29 downto 0);
+		next_ip_o: out std_logic_vector(29 downto 0);
+		valid_o: out std_logic;
+		ready_i: in std_logic;
+		
+		jump_valid_i: in std_logic;
+		jump_dst_i: in std_logic_vector(29 downto 0);
+		jump_ready_o: out std_logic
+	);
+end entity;
+
+architecture rtl of lxp32_fetch is
+
+signal init: std_logic:='1';
+signal init_cnt: unsigned(7 downto 0):=(others=>'0');
+
+signal fetch_addr: std_logic_vector(29 downto 0):=START_ADDR(31 downto 2);
+
+signal next_word: std_logic;
+signal suppress_re: std_logic:='0';
+signal re: std_logic;
+signal requested: std_logic:='0';
+
+signal fifo_rst: std_logic;
+signal fifo_we: std_logic;
+signal fifo_din: std_logic_vector(31 downto 0);
+signal fifo_re: std_logic;
+signal fifo_dout: std_logic_vector(31 downto 0);
+signal fifo_empty: std_logic;
+signal fifo_full: std_logic;
+
+signal jr: std_logic:='0';
+
+signal next_ip: std_logic_vector(fetch_addr'range);
+signal current_ip: std_logic_vector(fetch_addr'range);
+
+begin
+
+-- INIT state machine (to initialize all registers)
+
+-- All CPU registers are expected to be zero-initialized after reset.
+-- Since these registers are implemented as a RAM block, we perform
+-- the initialization sequentially by generating ""mov rN, 0"" instructions
+-- for each N from 0 to 255.
+--
+-- With SRAM-based FPGAs, flip-flops and RAM blocks have deterministic
+-- state after configuration. On these technologies the CPU can operate
+-- without reset and the initialization procedure described above is not
+-- needed. However, the initialization is still performed as usual when
+-- external reset signal is asserted.
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		if rst_i='1' then
+			init<='0';
+			init_cnt<=(others=>'0');
+		else
+			if init='0' and ready_i='1' then
+				init_cnt<=init_cnt+1;
+				if init_cnt=X""FF"" then
+					init<='1';
+				end if;
+			end if;
+		end if;
+	end if;
+end process;
+
+-- FETCH state machine
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		if rst_i='1' then
+			fetch_addr<=START_ADDR(31 downto 2);
+			requested<='0';
+			jr<='0';
+			suppress_re<='0';
+			next_ip<=(others=>'-');
+		else
+			jr<='0';
+-- Suppress LLI request if jump signal is active but will not be processed
+-- in this cycle. Helps to reduce jump latency with high-latency LLI slaves.
+-- Note: gating ""re"" with ""jump_valid_i and not jr"" asynchronously would
+-- reduce jump latency even more, but we really want to avoid too large
+-- clock-to-out on LLI outputs.
+			suppress_re<=jump_valid_i and not jr and not next_word;
+			if lli_busy_i='0' then
+				requested<=re and not (jump_valid_i and not jr);
+			end if;
+			if next_word='1' then
+-- It's not immediately obvious why, but current_ip and next_ip will contain
+-- the addresses of the current instruction and the next instruction to be
+-- fetched, respectively, by the time the instruction is passed to the decode
+-- stage. Basically, this is because when either the decoder or the IBUS
+-- stalls, the fetch_addr counter will also stop incrementing.
+				next_ip<=fetch_addr;
+				current_ip<=next_ip;
+				if jump_valid_i='1' and jr='0' then
+					fetch_addr<=jump_dst_i;
+					jr<='1';
+				else
+					fetch_addr<=std_logic_vector(unsigned(fetch_addr)+1);
+				end if;
+			end if;
+		end if;
+	end if;
+end process;
+
+next_word<=(fifo_empty or ready_i) and not lli_busy_i and init;
+re<=(fifo_empty or ready_i) and init and not suppress_re;
+lli_re_o<=re;
+lli_adr_o<=fetch_addr;
+
+jump_ready_o<=jr;
+
+-- Small instruction buffer
+
+fifo_rst<=rst_i or (jump_valid_i and not jr);
+fifo_we<=requested and not lli_busy_i;
+fifo_din<=lli_dat_i;
+fifo_re<=ready_i and not fifo_empty;
+
+ubuf_inst: entity work.lxp32_ubuf(rtl)
+	generic map(
+		DATA_WIDTH=>32
+	)
+	port map(
+		clk_i=>clk_i,
+		rst_i=>fifo_rst,
+		
+		we_i=>fifo_we,
+		d_i=>fifo_din,
+		re_i=>fifo_re,
+		d_o=>fifo_dout,
+		
+		empty_o=>fifo_empty,
+		full_o=>fifo_full
+	);
+
+next_ip_o<=next_ip;
+current_ip_o<=current_ip;
+word_o<=fifo_dout when init='1' else X""40""&std_logic_vector(init_cnt)&X""0000"";
+valid_o<=not fifo_empty or not init;
+
+-- Note: the following code contains a few simulation-only assertions
+-- to check that current_ip and next_ip signals, used in procedure calls
+-- and interrupts, are correct. 
+-- This code should be ignored by a synthesizer since it doesn't drive
+-- any signals, but we also surround it by metacomments, just in case.
+
+-- synthesis translate_off
+
+process (clk_i) is
+	type Pair is record
+		addr: std_logic_vector(fetch_addr'range);
+		data: std_logic_vector(31 downto 0);
+	end record;
+	type Pairs is array (7 downto 0) of Pair;
+	variable buf: Pairs;
+	variable count: integer range buf'range:=0;
+	variable current_pair: Pair;
+begin
+	if rising_edge(clk_i) then
+		if fifo_rst='1' then -- jump
+			count:=0;
+		elsif fifo_we='1' then -- LLI returned data
+			current_pair.data:=fifo_din;
+			buf(count):=current_pair;
+			count:=count+1;
+		end if;
+		if re='1' and lli_busy_i='0' then -- data requested
+			current_pair.addr:=fetch_addr;
+		end if;
+		if fifo_empty='0' and fifo_rst='0' then -- fetch output is valid
+			assert count>0
+				report ""Fetch: buffer should be empty""
+				severity failure;
+			assert buf(0).data=fifo_dout
+				report ""Fetch: incorrect data""
+				severity failure;
+			assert buf(0).addr=current_ip
+				report ""Fetch: incorrect current_ip""
+				severity failure;
+			assert std_logic_vector(unsigned(buf(0).addr)+1)=next_ip
+				report ""Fetch: incorrect next_ip""
+				severity failure;
+			if ready_i='1' then
+				buf(buf'high-1 downto 0):=buf(buf'high downto 1); -- we don't care about the highest item
+				count:=count-1;
+			end if;
+		end if;
+	end if;
+end process;
+
+-- synthesis translate_on
+
+end architecture;
+"
+"# VHDL Analysis for 'lxp32_icache.vhd'
+
+## File Comments
+- -------------------------------------------------------------------
+- Instruction cache
+- Part of the LXP32 CPU
+- Copyright (c) 2016 by Alex I. Kuznetsov
+- A simple single-page buffer providing both caching and
+- prefetching capabilities. Useful for high-latency memory,
+- such as external SDRAM.
+- -------------------------------------------------------------------
+- Note: the following five signals are zero-initialized for
+- simulation only, to suppress warnings from numeric_std.
+- Plus 16 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+
+## Entity: lxp32_icache
+
+## Architecture: rtl of lxp32_icache
+
+### Signals
+- lli_adr_reg: std_logic_vector(lli_adr_i'range)
+- lli_adr_mux: std_logic_vector(lli_adr_i'range)
+- ram_waddr: std_logic_vector(7 downto 0)
+- ram_raddr: std_logic_vector(7 downto 0)
+- ram_re: std_logic
+- ram_we: std_logic
+- read_base: unsigned(21 downto 0)
+- read_offset: unsigned(7 downto 0)
+- init: std_logic:='0'
+- burst1: std_logic
+- terminate_burst: std_logic
+- near_miss: std_logic:='0'
+- prefetch_distance: unsigned(7 downto 0)
+- wrap_cnt: integer range 0 to 3:=0
+- burst_cnt: integer range 0 to BURST_SIZE:=0
+- wb_stb: std_logic:='0'
+- wb_cti: std_logic_vector(2 downto 0)
+- current_base: unsigned(21 downto 0):=(others=>'0')
+- current_offset: unsigned(7 downto 0):=(others=>'0')
+- prev_base: unsigned(21 downto 0):=(others=>'0')
+- next_base: unsigned(21 downto 0):=(others=>'0')
+- start_offset: unsigned(7 downto 0):=(others=>'0')
+- hitc: std_logic
+- hitp: std_logic
+- miss: std_logic:='0'
+- is detected
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		if rst_i='1' then
+			init<='0';
+		elsif lli_re_i='1' then
+			init<='1';
+		end if;
+	end if;
+end process;
+
+-- Fill cache
+
+prefetch_distance<=current_offset-read_offset;
+
+-- Note: ""near_miss"" signal prevents cache invalidation when difference
+-- between the requested address and the currently fetched address 
+-- is too small (and, therefore, the requested data will be fetched soon
+-- without invalidation).
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		if rst_i='1' then
+			near_miss<='0'
+
+### Processes
+- Process 'Unnamed process' (Clocked) with sensitivity list: clk_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: clk_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: clk_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: clk_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: clk_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+
+## Functional Analysis
+
+- Uses reset signal(s): burst_cnt, first, terminate_burst, burst1, BURST_SIZE, rst_i
+- Implements memory functionality
+- This appears to be a CPU component
+
+## Code Metrics
+- Line count: 290
+- Process count: 10
+- Signal count: 26
+
+## Summary
+- This module implements memory functionality.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'lxp32_icache.vhd' plays a specific role in the overall CPU architecture.
+","---------------------------------------------------------------------
+-- Instruction cache
+--
+-- Part of the LXP32 CPU
+--
+-- Copyright (c) 2016 by Alex I. Kuznetsov
+--
+-- A simple single-page buffer providing both caching and
+-- prefetching capabilities. Useful for high-latency memory,
+-- such as external SDRAM.
+---------------------------------------------------------------------
+
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+
+entity lxp32_icache is
+	generic(
+		BURST_SIZE: integer;
+		PREFETCH_SIZE: integer
+	);
+	port(
+		clk_i: in std_logic;
+		rst_i: in std_logic;
+		
+		lli_re_i: in std_logic;
+		lli_adr_i: in std_logic_vector(29 downto 0);
+		lli_dat_o: out std_logic_vector(31 downto 0);
+		lli_busy_o: out std_logic;
+		
+		wbm_cyc_o: out std_logic;
+		wbm_stb_o: out std_logic;
+		wbm_cti_o: out std_logic_vector(2 downto 0);
+		wbm_bte_o: out std_logic_vector(1 downto 0);
+		wbm_ack_i: in std_logic;
+		wbm_adr_o: out std_logic_vector(29 downto 0);
+		wbm_dat_i: in std_logic_vector(31 downto 0)
+	);
+end entity;
+
+architecture rtl of lxp32_icache is
+
+signal lli_adr_reg: std_logic_vector(lli_adr_i'range);
+signal lli_adr_mux: std_logic_vector(lli_adr_i'range);
+
+signal ram_waddr: std_logic_vector(7 downto 0);
+signal ram_raddr: std_logic_vector(7 downto 0);
+signal ram_re: std_logic;
+signal ram_we: std_logic;
+
+signal read_base: unsigned(21 downto 0);
+signal read_offset: unsigned(7 downto 0);
+
+signal init: std_logic:='0';
+signal burst1: std_logic;
+signal terminate_burst: std_logic;
+signal near_miss: std_logic:='0';
+signal prefetch_distance: unsigned(7 downto 0);
+signal wrap_cnt: integer range 0 to 3:=0;
+signal burst_cnt: integer range 0 to BURST_SIZE:=0;
+signal wb_stb: std_logic:='0';
+signal wb_cti: std_logic_vector(2 downto 0);
+
+-- Note: the following five signals are zero-initialized for
+-- simulation only, to suppress warnings from numeric_std.
+-- This initialization is not required for synthesis.
+
+signal current_base: unsigned(21 downto 0):=(others=>'0');
+signal current_offset: unsigned(7 downto 0):=(others=>'0');
+signal prev_base: unsigned(21 downto 0):=(others=>'0');
+signal next_base: unsigned(21 downto 0):=(others=>'0');
+signal start_offset: unsigned(7 downto 0):=(others=>'0');
+
+signal hitc: std_logic;
+signal hitp: std_logic;
+signal miss: std_logic:='0';
+
+begin
+
+assert PREFETCH_SIZE>=4
+	report ""PREFETCH_SIZE cannot be less than 4""
+	severity failure;
+assert BURST_SIZE>=4
+	report ""BURST_SIZE cannot be less than 4""
+	severity failure;
+assert PREFETCH_SIZE+BURST_SIZE<=128
+	report ""PREFETCH_SIZE and BURST_SIZE combined cannot be greater than 128""
+	severity failure;
+
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		if miss='0' then
+			lli_adr_reg<=lli_adr_i;
+		end if;
+	end if;
+end process;
+
+lli_adr_mux<=lli_adr_i when miss='0' else lli_adr_reg;
+
+read_base<=unsigned(lli_adr_mux(29 downto 8));
+read_offset<=unsigned(lli_adr_mux(7 downto 0));
+
+-- Cache RAM
+
+ram_waddr<=std_logic_vector(current_offset);
+ram_raddr<=std_logic_vector(read_offset);
+ram_we<=wb_stb and wbm_ack_i;
+ram_re<=lli_re_i or miss;
+
+ram_inst: entity work.lxp32_ram256x32(rtl)
+	port map(
+		clk_i=>clk_i,
+		
+		we_i=>ram_we,
+		waddr_i=>ram_waddr,
+		wdata_i=>wbm_dat_i,
+		
+		re_i=>ram_re,
+		raddr_i=>ram_raddr,
+		rdata_o=>lli_dat_o
+	);
+
+-- Determine hit/miss
+
+-- This cache uses a single ring buffer. Address in buffer corresponds
+-- to the lower 8 bits of the full address. The part of the buffer that
+-- is higher than current_offset represents a previous block (""p""), the
+-- other part represents a current block (""c"").
+
+hitc<='1' when read_base=current_base and read_offset<current_offset and
+	((wrap_cnt=1 and read_offset>=start_offset) or
+	wrap_cnt=2 or wrap_cnt=3) else '0';
+
+hitp<='1' when read_base=prev_base and read_offset>current_offset and
+	((wrap_cnt=2 and read_offset>=start_offset) or
+	wrap_cnt=3) else '0';
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		if rst_i='1' then
+			miss<='0';
+		else
+			if hitc='0' and hitp='0' and ram_re='1' then
+				miss<='1';
+			else
+				miss<='0';
+			end if;
+		end if;
+	end if;
+end process;
+
+lli_busy_o<=miss;
+
+-- Set INIT flag when the first lli_re_i signal is detected
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		if rst_i='1' then
+			init<='0';
+		elsif lli_re_i='1' then
+			init<='1';
+		end if;
+	end if;
+end process;
+
+-- Fill cache
+
+prefetch_distance<=current_offset-read_offset;
+
+-- Note: ""near_miss"" signal prevents cache invalidation when difference
+-- between the requested address and the currently fetched address 
+-- is too small (and, therefore, the requested data will be fetched soon
+-- without invalidation).
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		if rst_i='1' then
+			near_miss<='0';
+		elsif wrap_cnt>0 and read_offset-current_offset<=to_unsigned(BURST_SIZE/2,8) and
+			((read_base=current_base and read_offset>=current_offset) or
+			(read_base=next_base and read_offset<current_offset))
+		then
+			near_miss<='1';
+		else
+			near_miss<='0';
+		end if;
+	end if;
+end process;
+
+terminate_burst<='1' when burst_cnt<BURST_SIZE-1 and miss='1' and
+	(burst_cnt>2 or burst1='0') and near_miss='0' else '0';
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		if rst_i='1' then
+			burst_cnt<=0;
+			wb_stb<='0';
+			wrap_cnt<=0;
+			wb_cti<=(others=>'-');
+			burst1<='-';
+			current_offset<=(others=>'-');
+			start_offset<=(others=>'-');
+			current_base<=(others=>'-');
+			next_base<=(others=>'-');
+			prev_base<=(others=>'-');
+			
+			-- To suppress numeric_std warnings
+			-- synthesis translate_off
+			current_offset<=(others=>'0');
+			start_offset<=(others=>'0');
+			current_base<=(others=>'0');
+			next_base<=(others=>'0');
+			prev_base<=(others=>'0');
+			-- synthesis translate_on
+		else
+			if burst_cnt=0 and init='1' then
+				if miss='1' and near_miss='0' then
+					wb_stb<='1';
+					wb_cti<=""010"";
+					current_offset<=read_offset;
+					start_offset<=read_offset;
+					current_base<=read_base;
+					next_base<=read_base+1;
+					burst_cnt<=1;
+					burst1<='1';
+					wrap_cnt<=1;
+				elsif prefetch_distance<to_unsigned(PREFETCH_SIZE,8) or near_miss='1' then
+					wb_stb<='1';
+					wb_cti<=""010"";
+					burst_cnt<=1;
+					burst1<='0';
+				end if;
+			else
+				if wbm_ack_i='1' then
+					current_offset<=current_offset+1;
+					if current_offset=X""FF"" then
+						current_base<=next_base;
+						next_base<=next_base+1;
+						prev_base<=current_base;
+						if wrap_cnt<3 then
+							wrap_cnt<=wrap_cnt+1;
+						end if;
+					end if;
+					if burst_cnt=BURST_SIZE-1 or terminate_burst='1' then
+						burst_cnt<=BURST_SIZE;
+						wb_cti<=""111"";
+					elsif burst_cnt<BURST_SIZE-1 then
+						burst_cnt<=burst_cnt+1;
+						wb_cti<=""010"";
+					else
+						if miss='1' and near_miss='0' then
+							wb_stb<='1';
+							wb_cti<=""010"";
+							current_offset<=read_offset;
+							start_offset<=read_offset;
+							current_base<=read_base;
+							next_base<=read_base+1;
+							burst_cnt<=1;
+							burst1<='1';
+							wrap_cnt<=1;
+						elsif prefetch_distance<to_unsigned(PREFETCH_SIZE,8) or near_miss='1' then
+							wb_stb<='1';
+							wb_cti<=""010"";
+							burst_cnt<=1;
+							burst1<='0';
+						else
+							burst_cnt<=0;
+							wb_stb<='0';
+						end if;
+					end if;
+				end if;
+			end if;
+		end if;
+	end if;
+end process;
+
+wbm_cyc_o<=wb_stb;
+wbm_stb_o<=wb_stb;
+wbm_cti_o<=wb_cti;
+wbm_bte_o<=""00"";
+wbm_adr_o<=std_logic_vector(current_base&current_offset);
+
+end architecture;
+"
+"# VHDL Analysis for 'lxp32_interrupt_mux.vhd'
+
+## File Comments
+- -------------------------------------------------------------------
+- Interrupt multiplexer
+- Part of the LXP32 CPU
+- Copyright (c) 2016 by Alex I. Kuznetsov
+- Manages LXP32 interrupts. Interrupts with lower numbers have
+- higher priority.
+- -------------------------------------------------------------------
+- Note: ""disabled"" interrupts (i.e. for which interrupts_enabled_i(i)='0')
+- are ignored completely, meaning that the interrupt handler won't be
+- called even if the interrupt is enabled later.
+- Plus 3 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+
+## Entity: lxp32_interrupt_mux
+
+## Architecture: rtl of lxp32_interrupt_mux
+
+### Signals
+- irq: std_logic_vector(irq_i'range)
+- irq_reg: std_logic_vector(irq_i'range):=(others=>'0')
+- state: state_type:=Ready
+- pending_interrupts: std_logic_vector(irq_i'range):=(others=>'0')
+- interrupt_valid: std_logic:='0'
+- interrupts_enabled: std_logic_vector(7 downto 0):=(others=>'0')
+- interrupts_wakeup: std_logic_vector(7 downto 0):=(others=>'0')
+- interrupts_level: std_logic_vector(7 downto 0):=(others=>'0')
+- interrupts_invert: std_logic_vector(7 downto 0):=(others=>'0')
+
+### Processes
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: clk_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: clk_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+
+## Functional Analysis
+
+- This appears to be a Finite State Machine implementation
+- Uses reset signal(s): rst_i
+- Implements control logic
+- This appears to be a CPU component
+
+## Code Metrics
+- Line count: 140
+- Process count: 4
+- Signal count: 9
+
+## Summary
+- This module appears to be a general-purpose digital logic implementation.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'lxp32_interrupt_mux.vhd' plays a specific role in the overall CPU architecture.
+","---------------------------------------------------------------------
+-- Interrupt multiplexer
+--
+-- Part of the LXP32 CPU
+--
+-- Copyright (c) 2016 by Alex I. Kuznetsov
+--
+-- Manages LXP32 interrupts. Interrupts with lower numbers have
+-- higher priority.
+---------------------------------------------------------------------
+
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+
+entity lxp32_interrupt_mux is
+	port(
+		clk_i: in std_logic;
+		rst_i: in std_logic;
+		
+		irq_i: in std_logic_vector(7 downto 0);
+		
+		interrupt_valid_o: out std_logic;
+		interrupt_vector_o: out std_logic_vector(2 downto 0);
+		interrupt_ready_i: in std_logic;
+		interrupt_return_i: in std_logic;
+
+		wakeup_o: out std_logic;
+		
+		sp_waddr_i: in std_logic_vector(7 downto 0);
+		sp_we_i: in std_logic;
+		sp_wdata_i: in std_logic_vector(31 downto 0)
+	);
+end entity;
+
+architecture rtl of lxp32_interrupt_mux is
+
+signal irq: std_logic_vector(irq_i'range);
+signal irq_reg: std_logic_vector(irq_i'range):=(others=>'0');
+
+type state_type is (Ready,Requested,WaitForExit);
+signal state: state_type:=Ready;
+
+signal pending_interrupts: std_logic_vector(irq_i'range):=(others=>'0');
+
+signal interrupt_valid: std_logic:='0';
+
+signal interrupts_enabled: std_logic_vector(7 downto 0):=(others=>'0');
+signal interrupts_wakeup: std_logic_vector(7 downto 0):=(others=>'0');
+signal interrupts_level: std_logic_vector(7 downto 0):=(others=>'0');
+signal interrupts_invert: std_logic_vector(7 downto 0):=(others=>'0');
+
+begin
+
+irq<=irq_i xor interrupts_invert;
+
+-- Note: ""disabled"" interrupts (i.e. for which interrupts_enabled_i(i)='0')
+-- are ignored completely, meaning that the interrupt handler won't be
+-- called even if the interrupt is enabled later.
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		if rst_i='1' then
+			irq_reg<=(others=>'0');
+			pending_interrupts<=(others=>'0');
+			state<=Ready;
+			interrupt_valid<='0';
+			interrupt_vector_o<=(others=>'-');
+			wakeup_o<='0';
+		else
+			irq_reg<=irq;
+			
+			pending_interrupts<=(pending_interrupts or 
+				(irq and not irq_reg)) and not interrupts_level and
+				interrupts_enabled and not interrupts_wakeup;
+			
+			case state is
+			when Ready =>
+				for i in irq'reverse_range loop -- lower interrupts have priority
+					if (interrupts_level(i)='0' and pending_interrupts(i)='1') or
+							(interrupts_level(i)='1' and irq(i)='1' and
+							interrupts_enabled(i)='1' and interrupts_wakeup(i)='0') then
+						pending_interrupts(i)<='0';
+						interrupt_valid<='1';
+						interrupt_vector_o<=std_logic_vector(to_unsigned(i,3));
+						state<=Requested;
+						exit;
+					end if;
+				end loop;
+			when Requested =>
+				if interrupt_ready_i='1' then
+					interrupt_valid<='0';
+					state<=WaitForExit;
+				end if;
+			when WaitForExit =>
+				if interrupt_return_i='1' then
+					state<=Ready;
+				end if;
+			end case;
+
+			wakeup_o<='0';
+			for i in irq'range loop
+				if interrupts_enabled(i)='1' and interrupts_wakeup(i)='1' then
+					if interrupts_level(i)='0' then -- edge triggered
+						if irq(i)='1' and irq_reg(i)='0' then
+							wakeup_o<='1';
+						end if;
+					else -- level triggered
+						if irq(i)='1' then
+							wakeup_o<='1';
+						end if;
+					end if;
+				end if;
+			end loop;
+		end if;
+	end if;
+end process;
+
+interrupt_valid_o<=interrupt_valid;
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		if rst_i='1' then
+			interrupts_enabled<=(others=>'0');
+			interrupts_wakeup<=(others=>'0');
+			interrupts_level<=(others=>'0');
+			interrupts_invert<=(others=>'0');
+		elsif sp_we_i='1' and sp_waddr_i=X""FC"" then
+			interrupts_enabled<=sp_wdata_i(7 downto 0);
+			interrupts_wakeup<=sp_wdata_i(15 downto 8);
+			interrupts_level<=sp_wdata_i(23 downto 16);
+			interrupts_invert<=sp_wdata_i(31 downto 24);
+		end if;
+	end if;
+end process;
+
+end architecture;
+"
+"# VHDL Analysis for 'lxp32_mul16x16.vhd'
+
+## File Comments
+- -------------------------------------------------------------------
+- A basic parallel 16x16 multiplier with an output register
+- Part of the LXP32 CPU
+- Copyright (c) 2016 by Alex I. Kuznetsov
+- A straightforward behavioral description. Can be replaced
+- with a library component wrapper if needed.
+- -------------------------------------------------------------------
+
+## Libraries and Packages
+- Library: ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+
+## Entity: lxp32_mul16x16
+
+## Architecture: rtl of lxp32_mul16x16
+
+### Processes
+- Process 'Unnamed process' (Clocked) with sensitivity list: clk_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+
+## Functional Analysis
+
+- This appears to be a CPU component
+
+## Code Metrics
+- Line count: 37
+- Process count: 2
+- Signal count: 0
+
+## Summary
+- This module implements register or flip-flop functionality.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'lxp32_mul16x16.vhd' plays a specific role in the overall CPU architecture.
+","---------------------------------------------------------------------
+-- A basic parallel 16x16 multiplier with an output register
+--
+-- Part of the LXP32 CPU
+--
+-- Copyright (c) 2016 by Alex I. Kuznetsov
+--
+-- A straightforward behavioral description. Can be replaced
+-- with a library component wrapper if needed.
+---------------------------------------------------------------------
+
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+
+entity lxp32_mul16x16 is
+	port(
+		clk_i: in std_logic;
+		a_i: in std_logic_vector(15 downto 0);
+		b_i: in std_logic_vector(15 downto 0);
+		p_o: out std_logic_vector(31 downto 0)
+	);
+end entity;
+
+architecture rtl of lxp32_mul16x16 is
+
+begin
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		p_o<=std_logic_vector(unsigned(a_i)*unsigned(b_i));
+	end if;
+end process;
+
+end architecture;
+"
+"# VHDL Analysis for 'lxp32_mul_dsp.vhd'
+
+## File Comments
+- -------------------------------------------------------------------
+- DSP multiplier
+- Part of the LXP32 CPU
+- Copyright (c) 2016 by Alex I. Kuznetsov
+- This multiplier is designed for technologies that provide fast
+- 16x16 multipliers, including most modern FPGA families. One
+- multiplication takes 2 cycles.
+- -------------------------------------------------------------------
+
+## Libraries and Packages
+- Library: ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+
+## Entity: lxp32_mul_dsp
+
+## Architecture: rtl of lxp32_mul_dsp
+
+### Signals
+- pp00: std_logic_vector(31 downto 0)
+- pp01: std_logic_vector(31 downto 0)
+- pp10: std_logic_vector(31 downto 0)
+- product: unsigned(31 downto 0)
+- ceo: std_logic:='0'
+
+### Component Instantiations
+- Instance 'mul00_inst' of component 'lxp32_mul16x16'
+- Instance 'mul01_inst' of component 'lxp32_mul16x16'
+- Instance 'mul10_inst' of component 'lxp32_mul16x16'
+
+### Processes
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: clk_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+
+## Functional Analysis
+
+- Uses reset signal(s): rst_i
+- This appears to be a CPU component
+
+## Code Metrics
+- Line count: 83
+- Process count: 2
+- Signal count: 5
+
+## Summary
+- This module appears to be a general-purpose digital logic implementation.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'lxp32_mul_dsp.vhd' plays a specific role in the overall CPU architecture.
+","---------------------------------------------------------------------
+-- DSP multiplier
+--
+-- Part of the LXP32 CPU
+--
+-- Copyright (c) 2016 by Alex I. Kuznetsov
+--
+-- This multiplier is designed for technologies that provide fast
+-- 16x16 multipliers, including most modern FPGA families. One
+-- multiplication takes 2 cycles.
+---------------------------------------------------------------------
+
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+
+entity lxp32_mul_dsp is
+	port(
+		clk_i: in std_logic;
+		rst_i: in std_logic;
+		ce_i: in std_logic;
+		op1_i: in std_logic_vector(31 downto 0);
+		op2_i: in std_logic_vector(31 downto 0);
+		ce_o: out std_logic;
+		result_o: out std_logic_vector(31 downto 0)
+	);
+end entity;
+
+architecture rtl of lxp32_mul_dsp is
+
+signal pp00: std_logic_vector(31 downto 0);
+signal pp01: std_logic_vector(31 downto 0);
+signal pp10: std_logic_vector(31 downto 0);
+
+signal product: unsigned(31 downto 0);
+
+signal ceo: std_logic:='0';
+
+begin
+
+mul00_inst: entity work.lxp32_mul16x16
+	port map(
+		clk_i=>clk_i,
+		a_i=>op1_i(15 downto 0),
+		b_i=>op2_i(15 downto 0),
+		p_o=>pp00
+	);
+
+mul01_inst: entity work.lxp32_mul16x16
+	port map(
+		clk_i=>clk_i,
+		a_i=>op1_i(15 downto 0),
+		b_i=>op2_i(31 downto 16),
+		p_o=>pp01
+	);
+
+mul10_inst: entity work.lxp32_mul16x16
+	port map(
+		clk_i=>clk_i,
+		a_i=>op1_i(31 downto 16),
+		b_i=>op2_i(15 downto 0),
+		p_o=>pp10
+	);
+
+product(31 downto 16)<=unsigned(pp00(31 downto 16))+unsigned(pp01(15 downto 0))+unsigned(pp10(15 downto 0));
+product(15 downto 0)<=unsigned(pp00(15 downto 0));
+result_o<=std_logic_vector(product);
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		if rst_i='1' then
+			ceo<='0';
+		else
+			ceo<=ce_i;
+		end if;
+	end if;
+end process;
+
+ce_o<=ceo;
+
+end architecture;
+"
+"# VHDL Analysis for 'lxp32_mul_opt.vhd'
+
+## File Comments
+- -------------------------------------------------------------------
+- Optimized multiplier
+- Part of the LXP32 CPU
+- Copyright (c) 2016 by Alex I. Kuznetsov
+- This multiplier is designed for technologies that don't provide
+- fast 16x16 multipliers. One multiplication takes 6 cycles.
+- The multiplication algorithm is based on carry-save accumulation
+- of partial products.
+- -------------------------------------------------------------------
+- Calculate 8 partial products in parallel
+- Plus 5 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+
+## Entity: lxp32_mul_opt
+
+## Architecture: rtl of lxp32_mul_opt
+
+### Signals
+- reg1: unsigned(op1_i'range)
+- reg2: unsigned(op2_i'range)
+- pp: pp_type
+- pp_sum: pp_sum_type
+- pp_carry: pp_carry_type
+- acc_sum: unsigned(31 downto 0)
+- acc_carry: unsigned(31 downto 0)
+- cnt: integer range 0 to 4:=0
+- result: std_logic_vector(result_o'range)
+- ceo: std_logic:='0'
+
+### Processes
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: clk_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) with sensitivity list: clk_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+
+## Functional Analysis
+
+- Uses reset signal(s): rst_i
+- Implements arithmetic/computational functionality
+- Implements control logic
+- This appears to be a CPU component
+- Defines custom functions: csa_sum, csa_carry
+
+## Code Metrics
+- Line count: 169
+- Process count: 4
+- Signal count: 10
+
+## Summary
+- This module appears to be a general-purpose digital logic implementation.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'lxp32_mul_opt.vhd' plays a specific role in the overall CPU architecture.
+","---------------------------------------------------------------------
+-- Optimized multiplier
+--
+-- Part of the LXP32 CPU
+--
+-- Copyright (c) 2016 by Alex I. Kuznetsov
+--
+-- This multiplier is designed for technologies that don't provide
+-- fast 16x16 multipliers. One multiplication takes 6 cycles.
+--
+-- The multiplication algorithm is based on carry-save accumulation
+-- of partial products.
+---------------------------------------------------------------------
+
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+
+entity lxp32_mul_opt is
+	port(
+		clk_i: in std_logic;
+		rst_i: in std_logic;
+		ce_i: in std_logic;
+		op1_i: in std_logic_vector(31 downto 0);
+		op2_i: in std_logic_vector(31 downto 0);
+		ce_o: out std_logic;
+		result_o: out std_logic_vector(31 downto 0)
+	);
+end entity;
+
+architecture rtl of lxp32_mul_opt is
+
+function csa_sum(a: unsigned; b: unsigned; c: unsigned; n: integer) return unsigned is
+	variable r: unsigned(n-1 downto 0);
+begin
+	for i in r'range loop
+		r(i):=a(i) xor b(i) xor c(i);
+	end loop;
+	return r;
+end function;
+
+function csa_carry(a: unsigned; b: unsigned; c: unsigned; n: integer) return unsigned is
+	variable r: unsigned(n-1 downto 0);
+begin
+	for i in r'range loop
+		r(i):=(a(i) and b(i)) or (a(i) and c(i)) or (b(i) and c(i));
+	end loop;
+	return r&""0"";
+end function;
+
+signal reg1: unsigned(op1_i'range);
+signal reg2: unsigned(op2_i'range);
+
+type pp_type is array (7 downto 0) of unsigned(31 downto 0);
+signal pp: pp_type;
+
+type pp_sum_type is array (7 downto 0) of unsigned(31 downto 0);
+signal pp_sum: pp_sum_type;
+
+type pp_carry_type is array (7 downto 0) of unsigned(32 downto 0);
+signal pp_carry: pp_carry_type;
+
+signal acc_sum: unsigned(31 downto 0);
+signal acc_carry: unsigned(31 downto 0);
+
+signal cnt: integer range 0 to 4:=0;
+
+signal result: std_logic_vector(result_o'range);
+signal ceo: std_logic:='0';
+
+begin
+
+-- Calculate 8 partial products in parallel
+
+pp_gen: for i in pp'range generate
+	pp(i)<=shift_left(reg1,i) when reg2(i)='1' else (others=>'0');
+end generate;
+
+-- Add partial products to the accumulator using carry-save adder tree
+
+pp_sum(0)<=csa_sum(pp(0),pp(1),pp(2),32);
+pp_carry(0)<=csa_carry(pp(0),pp(1),pp(2),32);
+
+pp_sum(1)<=csa_sum(pp(3),pp(4),pp(5),32);
+pp_carry(1)<=csa_carry(pp(3),pp(4),pp(5),32);
+
+pp_sum(2)<=csa_sum(pp(6),pp(7),acc_sum,32);
+pp_carry(2)<=csa_carry(pp(6),pp(7),acc_sum,32);
+
+pp_sum(3)<=csa_sum(pp_sum(0),pp_carry(0),pp_sum(1),32);
+pp_carry(3)<=csa_carry(pp_sum(0),pp_carry(0),pp_sum(1),32);
+
+pp_sum(4)<=csa_sum(pp_carry(1),pp_sum(2),pp_carry(2),32);
+pp_carry(4)<=csa_carry(pp_carry(1),pp_sum(2),pp_carry(2),32);
+
+pp_sum(5)<=csa_sum(pp_sum(3),pp_carry(3),pp_sum(4),32);
+pp_carry(5)<=csa_carry(pp_sum(3),pp_carry(3),pp_sum(4),32);
+
+pp_sum(6)<=csa_sum(pp_sum(5),pp_carry(5),pp_carry(4),32);
+pp_carry(6)<=csa_carry(pp_sum(5),pp_carry(5),pp_carry(4),32);
+
+pp_sum(7)<=csa_sum(pp_sum(6),pp_carry(6),acc_carry,32);
+pp_carry(7)<=csa_carry(pp_sum(6),pp_carry(6),acc_carry,32);
+
+-- Multiplier state machine
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		if rst_i='1' then
+			ceo<='0';
+			cnt<=0;
+			reg1<=(others=>'-');
+			reg2<=(others=>'-');
+			acc_sum<=(others=>'-');
+			acc_carry<=(others=>'-');
+		else
+			if cnt=1 then
+				ceo<='1';
+			else
+				ceo<='0';
+			end if;
+			
+			if ce_i='1' then
+				cnt<=4;
+				reg1<=unsigned(op1_i);
+				reg2<=unsigned(op2_i);
+				acc_sum<=(others=>'0');
+				acc_carry<=(others=>'0');
+			else
+				acc_sum<=pp_sum(7);
+				acc_carry<=pp_carry(7)(acc_carry'range);
+				reg1<=reg1(reg1'high-8 downto 0)&X""00"";
+				reg2<=X""00""&reg2(reg2'high downto 8);
+				if cnt>0 then
+					cnt<=cnt-1;
+				end if;
+			end if;
+		end if;
+	end if;
+end process;
+
+result<=std_logic_vector(acc_sum+acc_carry);
+
+result_o<=result;
+ce_o<=ceo;
+
+-- A simulation-time multiplication check
+
+-- synthesis translate_off
+
+process (clk_i) is
+	variable p: unsigned(op1_i'length+op2_i'length-1 downto 0);
+begin
+	if rising_edge(clk_i) then
+		if ce_i='1' then
+			p:=unsigned(op1_i)*unsigned(op2_i);
+		elsif ceo='1' then
+			assert result=std_logic_vector(p(result'range))
+				report ""Incorrect multiplication result""
+				severity failure;
+		end if;
+	end if;
+end process;
+
+-- synthesis translate_on
+
+end architecture;
+"
+"# VHDL Analysis for 'lxp32_mul_seq.vhd'
+
+## File Comments
+- -------------------------------------------------------------------
+- Sequential multiplier
+- Part of the LXP32 CPU
+- Copyright (c) 2016 by Alex I. Kuznetsov
+- The smallest possible multiplier. Implemented using
+- an accumulator. One multiplication takes 34 cycles.
+- -------------------------------------------------------------------
+
+## Libraries and Packages
+- Library: ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+
+## Entity: lxp32_mul_seq
+
+## Architecture: rtl of lxp32_mul_seq
+
+### Signals
+- reg1: unsigned(op1_i'range)
+- reg2: unsigned(op2_i'range)
+- pp: unsigned(31 downto 0)
+- acc_sum: unsigned(31 downto 0)
+- cnt: integer range 0 to 32:=0
+- ceo: std_logic:='0'
+
+### Processes
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: clk_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+
+## Functional Analysis
+
+- Uses reset signal(s): rst_i
+- This appears to be a CPU component
+
+## Code Metrics
+- Line count: 78
+- Process count: 2
+- Signal count: 6
+
+## Summary
+- This module appears to be a general-purpose digital logic implementation.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'lxp32_mul_seq.vhd' plays a specific role in the overall CPU architecture.
+","---------------------------------------------------------------------
+-- Sequential multiplier
+--
+-- Part of the LXP32 CPU
+--
+-- Copyright (c) 2016 by Alex I. Kuznetsov
+--
+-- The smallest possible multiplier. Implemented using
+-- an accumulator. One multiplication takes 34 cycles.
+---------------------------------------------------------------------
+
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+
+entity lxp32_mul_seq is
+	port(
+		clk_i: in std_logic;
+		rst_i: in std_logic;
+		ce_i: in std_logic;
+		op1_i: in std_logic_vector(31 downto 0);
+		op2_i: in std_logic_vector(31 downto 0);
+		ce_o: out std_logic;
+		result_o: out std_logic_vector(31 downto 0)
+	);
+end entity;
+
+architecture rtl of lxp32_mul_seq is
+
+signal reg1: unsigned(op1_i'range);
+signal reg2: unsigned(op2_i'range);
+signal pp: unsigned(31 downto 0);
+signal acc_sum: unsigned(31 downto 0);
+signal cnt: integer range 0 to 32:=0;
+signal ceo: std_logic:='0';
+
+begin
+
+pp<=reg1 when reg2(0)='1' else (others=>'0');
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		if rst_i='1' then
+			ceo<='0';
+			cnt<=0;
+			reg1<=(others=>'-');
+			reg2<=(others=>'-');
+			acc_sum<=(others=>'-');
+		else
+			if cnt=1 then
+				ceo<='1';
+			else
+				ceo<='0';
+			end if;
+			
+			if ce_i='1' then
+				cnt<=32;
+				reg1<=unsigned(op1_i);
+				reg2<=unsigned(op2_i);
+				acc_sum<=(others=>'0');
+			else
+				acc_sum<=acc_sum+pp;
+				reg1<=reg1(reg1'high-1 downto 0)&""0"";
+				reg2<=""0""&reg2(reg2'high downto 1);
+				if cnt>0 then
+					cnt<=cnt-1;
+				end if;
+			end if;
+		end if;
+	end if;
+end process;
+
+result_o<=std_logic_vector(acc_sum);
+ce_o<=ceo;
+
+end architecture;
+"
+"# VHDL Analysis for 'lxp32_ram256x32.vhd'
+
+## File Comments
+- -------------------------------------------------------------------
+- Generic dual-port memory
+- Part of the LXP32 CPU
+- Copyright (c) 2016 by Alex I. Kuznetsov
+- Portable description of a dual-port memory block with one write
+- port. Major FPGA synthesis tools can infer on-chip block RAM
+- from this description. Can be replaced with a library component
+- wrapper if needed.
+- -------------------------------------------------------------------
+- zero-initialize for SRAM-based FPGAs
+- Plus 4 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+
+## Entity: lxp32_ram256x32
+
+## Architecture: rtl of lxp32_ram256x32
+
+### Signals
+- ram: ram_type:=(others=>(others=>'0'))
+- is ""no_rw_check"";
+attribute ram_style: string
+
+### Processes
+- Process 'Unnamed process' (Clocked) with sensitivity list: clk_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) with sensitivity list: clk_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+
+## Functional Analysis
+
+- Implements memory functionality
+- This appears to be a CPU component
+
+## Code Metrics
+- Line count: 71
+- Process count: 4
+- Signal count: 2
+
+## Summary
+- This module implements memory functionality.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'lxp32_ram256x32.vhd' plays a specific role in the overall CPU architecture.
+","---------------------------------------------------------------------
+-- Generic dual-port memory
+--
+-- Part of the LXP32 CPU
+--
+-- Copyright (c) 2016 by Alex I. Kuznetsov
+--
+-- Portable description of a dual-port memory block with one write
+-- port. Major FPGA synthesis tools can infer on-chip block RAM
+-- from this description. Can be replaced with a library component
+-- wrapper if needed.
+---------------------------------------------------------------------
+
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+
+entity lxp32_ram256x32 is
+	port(
+		clk_i: in std_logic;
+		
+		we_i: in std_logic;
+		waddr_i: in std_logic_vector(7 downto 0);
+		wdata_i: in std_logic_vector(31 downto 0);
+		
+		re_i: in std_logic;
+		raddr_i: in std_logic_vector(7 downto 0);
+		rdata_o: out std_logic_vector(31 downto 0)
+	);
+end entity;
+
+architecture rtl of lxp32_ram256x32 is
+
+type ram_type is array(255 downto 0) of std_logic_vector(31 downto 0);
+signal ram: ram_type:=(others=>(others=>'0')); -- zero-initialize for SRAM-based FPGAs
+
+attribute syn_ramstyle: string;
+attribute syn_ramstyle of ram: signal is ""no_rw_check"";
+attribute ram_style: string; -- for Xilinx
+attribute ram_style of ram: signal is ""block"";
+
+begin
+
+-- Write port
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		if we_i='1' then
+			ram(to_integer(unsigned(waddr_i)))<=wdata_i;
+		end if;
+	end if;
+end process;
+
+-- Read port
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		if re_i='1' then
+			if is_x(raddr_i) then -- to avoid numeric_std warnings during simulation
+				rdata_o<=(others=>'X');
+			else
+				rdata_o<=ram(to_integer(unsigned(raddr_i)));
+			end if;
+		end if;
+	end if;
+end process;
+
+end architecture;
+"
+"# VHDL Analysis for 'lxp32_scratchpad.vhd'
+
+## File Comments
+- -------------------------------------------------------------------
+- Scratchpad
+- Part of the LXP32 CPU
+- Copyright (c) 2016 by Alex I. Kuznetsov
+- LXP32 register file implemented as a RAM block. Since we need
+- to read two registers simultaneously, the memory is duplicated.
+- -------------------------------------------------------------------
+- RAM 1
+- RAM 2
+- Read/write collision detection
+
+## Libraries and Packages
+- Library: ieee
+- Use: ieee.std_logic_1164.all
+
+## Entity: lxp32_scratchpad
+
+## Architecture: rtl of lxp32_scratchpad
+
+### Signals
+- wdata_reg: std_logic_vector(wdata_i'range)
+- ram1_rdata: std_logic_vector(31 downto 0)
+- ram2_rdata: std_logic_vector(31 downto 0)
+- ram1_collision: std_logic
+- ram2_collision: std_logic
+
+### Processes
+- Process 'Unnamed process' (Clocked) with sensitivity list: clk_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+
+## Functional Analysis
+
+- Implements memory functionality
+- This appears to be a CPU component
+- Implements register file/bank functionality
+
+## Code Metrics
+- Line count: 94
+- Process count: 2
+- Signal count: 5
+
+## Summary
+- This module implements memory functionality.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'lxp32_scratchpad.vhd' plays a specific role in the overall CPU architecture.
+","---------------------------------------------------------------------
+-- Scratchpad
+--
+-- Part of the LXP32 CPU
+--
+-- Copyright (c) 2016 by Alex I. Kuznetsov
+--
+-- LXP32 register file implemented as a RAM block. Since we need
+-- to read two registers simultaneously, the memory is duplicated.
+---------------------------------------------------------------------
+
+library ieee;
+use ieee.std_logic_1164.all;
+
+entity lxp32_scratchpad is
+	port(
+		clk_i: in std_logic;
+		
+		raddr1_i: in std_logic_vector(7 downto 0);
+		rdata1_o: out std_logic_vector(31 downto 0);
+		raddr2_i: in std_logic_vector(7 downto 0);
+		rdata2_o: out std_logic_vector(31 downto 0);
+		
+		waddr_i: in std_logic_vector(7 downto 0);
+		we_i: in std_logic;
+		wdata_i: in std_logic_vector(31 downto 0)
+	);
+end entity;
+
+architecture rtl of lxp32_scratchpad is
+
+signal wdata_reg: std_logic_vector(wdata_i'range);
+signal ram1_rdata: std_logic_vector(31 downto 0);
+signal ram2_rdata: std_logic_vector(31 downto 0);
+
+signal ram1_collision: std_logic;
+signal ram2_collision: std_logic;
+
+begin
+
+-- RAM 1
+
+ram_inst1: entity work.lxp32_ram256x32(rtl)
+	port map(
+		clk_i=>clk_i,
+		
+		we_i=>we_i,
+		waddr_i=>waddr_i,
+		wdata_i=>wdata_i,
+		
+		re_i=>'1',
+		raddr_i=>raddr1_i,
+		rdata_o=>ram1_rdata
+	);
+
+-- RAM 2
+
+ram_inst2: entity work.lxp32_ram256x32(rtl)
+	port map(
+		clk_i=>clk_i,
+		
+		we_i=>we_i,
+		waddr_i=>waddr_i,
+		wdata_i=>wdata_i,
+		
+		re_i=>'1',
+		raddr_i=>raddr2_i,
+		rdata_o=>ram2_rdata
+	);
+
+-- Read/write collision detection
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		wdata_reg<=wdata_i;
+		if waddr_i=raddr1_i and we_i='1' then
+			ram1_collision<='1';
+		else
+			ram1_collision<='0';
+		end if;
+		if waddr_i=raddr2_i and we_i='1' then
+			ram2_collision<='1';
+		else
+			ram2_collision<='0';
+		end if;
+	end if;
+end process;
+
+rdata1_o<=ram1_rdata when ram1_collision='0' else wdata_reg;
+rdata2_o<=ram2_rdata when ram2_collision='0' else wdata_reg;
+
+end architecture;
+"
+"# VHDL Analysis for 'lxp32_shifter.vhd'
+
+## File Comments
+- -------------------------------------------------------------------
+- Barrel shifter
+- Part of the LXP32 CPU
+- Copyright (c) 2016 by Alex I. Kuznetsov
+- Performs logical (unsigned) and arithmetic (signed) shifts
+- in both directions. Pipeline latency: 1 cycle.
+- -------------------------------------------------------------------
+- 0 for unsigned shifts, sign bit for signed ones
+- Internally, data are shifted in left direction. For right shifts
+- we reverse the argument's bit order
+- Plus 2 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Use: ieee.std_logic_1164.all
+
+## Entity: lxp32_shifter
+
+## Architecture: rtl of lxp32_shifter
+
+### Signals
+- data: std_logic_vector(d_i'range)
+- data_shifted: std_logic_vector(d_i'range)
+- fill: std_logic
+- fill_v: std_logic_vector(3 downto 0)
+- cascades: cascades_type
+- stage2_data: std_logic_vector(d_i'range)
+- stage2_s: std_logic_vector(s_i'range)
+- stage2_fill: std_logic
+- stage2_fill_v: std_logic_vector(15 downto 0)
+- stage2_right: std_logic
+- ceo: std_logic:='0'
+
+### Processes
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: clk_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+
+## Functional Analysis
+
+- Uses reset signal(s): rst_i
+- May be part of a pipeline architecture
+- This appears to be a CPU component
+
+## Code Metrics
+- Line count: 100
+- Process count: 2
+- Signal count: 11
+
+## Summary
+- This module implements a pipeline stage.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'lxp32_shifter.vhd' plays a specific role in the overall CPU architecture.
+","---------------------------------------------------------------------
+-- Barrel shifter
+--
+-- Part of the LXP32 CPU
+--
+-- Copyright (c) 2016 by Alex I. Kuznetsov
+--
+-- Performs logical (unsigned) and arithmetic (signed) shifts
+-- in both directions. Pipeline latency: 1 cycle.
+---------------------------------------------------------------------
+
+library ieee;
+use ieee.std_logic_1164.all;
+
+entity lxp32_shifter is
+	port(
+		clk_i: in std_logic;
+		rst_i: in std_logic;
+		ce_i: in std_logic;
+		d_i: in std_logic_vector(31 downto 0);
+		s_i: in std_logic_vector(4 downto 0);
+		right_i: in std_logic;
+		sig_i: in std_logic;
+		ce_o: out std_logic;
+		d_o: out std_logic_vector(31 downto 0)
+	);
+end entity;
+
+architecture rtl of lxp32_shifter is
+
+signal data: std_logic_vector(d_i'range);
+signal data_shifted: std_logic_vector(d_i'range);
+
+signal fill: std_logic; -- 0 for unsigned shifts, sign bit for signed ones
+signal fill_v: std_logic_vector(3 downto 0);
+
+type cascades_type is array (4 downto 0) of std_logic_vector(d_i'range);
+signal cascades: cascades_type;
+
+signal stage2_data: std_logic_vector(d_i'range);
+signal stage2_s: std_logic_vector(s_i'range);
+signal stage2_fill: std_logic;
+signal stage2_fill_v: std_logic_vector(15 downto 0);
+signal stage2_right: std_logic;
+
+signal ceo: std_logic:='0';
+
+begin
+
+-- Internally, data are shifted in left direction. For right shifts
+-- we reverse the argument's bit order
+
+data_gen: for i in data'range generate
+	data(i)<=d_i(i) when right_i='0' else d_i(d_i'high-i);
+end generate;
+
+-- A set of cascaded shifters shifting by powers of two
+
+fill<=sig_i and data(0);
+fill_v<=(others=>fill);
+
+cascades(0)<=data(30 downto 0)&fill_v(0) when s_i(0)='1' else data;
+cascades(1)<=cascades(0)(29 downto 0)&fill_v(1 downto 0) when s_i(1)='1' else cascades(0);
+cascades(2)<=cascades(1)(27 downto 0)&fill_v(3 downto 0) when s_i(2)='1' else cascades(1);
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		if rst_i='1' then
+			ceo<='0';
+			stage2_data<=(others=>'-');
+			stage2_s<=(others=>'-');
+			stage2_fill<='-';
+			stage2_right<='-';
+		else
+			ceo<=ce_i;
+			stage2_data<=cascades(2);
+			stage2_s<=s_i;
+			stage2_fill<=fill;
+			stage2_right<=right_i;
+		end if;
+	end if;
+end process;
+
+stage2_fill_v<=(others=>stage2_fill);
+
+cascades(3)<=stage2_data(23 downto 0)&stage2_fill_v(7 downto 0) when stage2_s(3)='1' else stage2_data;
+cascades(4)<=cascades(3)(15 downto 0)&stage2_fill_v(15 downto 0) when stage2_s(4)='1' else cascades(3);
+
+-- Reverse bit order back, if needed
+
+data_shifted_gen: for i in data_shifted'range generate
+	data_shifted(i)<=cascades(4)(i) when stage2_right='0' else cascades(4)(cascades(4)'high-i);
+end generate;
+
+d_o<=data_shifted;
+ce_o<=ceo;
+
+end architecture;
+"
+"# VHDL Analysis for 'lxp32_ubuf.vhd'
+
+## File Comments
+- -------------------------------------------------------------------
+- Microbuffer
+- Part of the LXP32 CPU
+- Copyright (c) 2016 by Alex I. Kuznetsov
+- A small buffer with a FIFO-like interface, implemented
+- using registers.
+- -------------------------------------------------------------------
+
+## Libraries and Packages
+- Library: ieee
+- Use: ieee.std_logic_1164.all
+
+## Entity: lxp32_ubuf
+
+## Architecture: rtl of lxp32_ubuf
+
+### Signals
+- we: std_logic
+- re: std_logic
+- empty: std_logic:='1'
+- full: std_logic:='0'
+- regs: regs_type
+- regs_mux: regs_type
+
+### Processes
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: clk_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+
+## Functional Analysis
+
+- Uses reset signal(s): rst_i
+- Implements memory functionality
+- Implements interface or communication protocol
+- This appears to be a CPU component
+
+## Code Metrics
+- Line count: 85
+- Process count: 2
+- Signal count: 6
+
+## Summary
+- This module appears to be a general-purpose digital logic implementation.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'lxp32_ubuf.vhd' plays a specific role in the overall CPU architecture.
+","---------------------------------------------------------------------
+-- Microbuffer
+--
+-- Part of the LXP32 CPU
+--
+-- Copyright (c) 2016 by Alex I. Kuznetsov
+--
+-- A small buffer with a FIFO-like interface, implemented
+-- using registers.
+---------------------------------------------------------------------
+
+library ieee;
+use ieee.std_logic_1164.all;
+
+entity lxp32_ubuf is
+	generic(
+		DATA_WIDTH: integer
+	);
+	port(
+		clk_i: in std_logic;
+		rst_i: in std_logic;
+		
+		we_i: in std_logic;
+		d_i: in std_logic_vector(DATA_WIDTH-1 downto 0);
+		re_i: in std_logic;
+		d_o: out std_logic_vector(DATA_WIDTH-1 downto 0);
+		
+		empty_o: out std_logic;
+		full_o: out std_logic
+	);
+end entity;
+
+architecture rtl of lxp32_ubuf is
+
+signal we: std_logic;
+signal re: std_logic;
+
+signal empty: std_logic:='1';
+signal full: std_logic:='0';
+
+type regs_type is array (1 downto 0) of std_logic_vector(DATA_WIDTH-1 downto 0);
+signal regs: regs_type;
+signal regs_mux: regs_type;
+
+begin
+
+we<=we_i and not full;
+re<=re_i and not empty;
+
+process (clk_i) is
+begin
+	if rising_edge(clk_i) then
+		if rst_i='1' then
+			empty<='1';
+			full<='0';
+			regs<=(others=>(others=>'-'));
+		else
+			if re='0' then
+				regs(0)<=regs_mux(0);
+			else
+				regs(0)<=regs_mux(1);
+			end if;
+			
+			regs(1)<=regs_mux(1);
+			
+			if we='1' and re='0' then
+				empty<='0';
+				full<=not empty;
+			elsif we='0' and re='1' then
+				empty<=not full;
+				full<='0';
+			end if;
+		end if;
+	end if;
+end process;
+
+regs_mux(0)<=regs(0) when we='0' or empty='0' else d_i;
+regs_mux(1)<=regs(1) when we='0' or empty='1' else d_i;
+
+d_o<=regs(0);
+empty_o<=empty;
+full_o<=full;
+
+end architecture;
+"
+"# VHDL Analysis for 'lxp32c_top.vhd'
+
+## File Comments
+- -------------------------------------------------------------------
+- LXP32C CPU top-level module (C-series, with instruction cache)
+- Part of the LXP32 CPU
+- Copyright (c) 2016 by Alex I. Kuznetsov
+- This version uses Wishbone B3 interface for the instruction bus
+- (IBUS). It is designed for high-latency program memory, such as
+- external SDRAM chips.
+- Parameters:
+- DBUS_RMW:           Use RMW cycle instead of SEL_O() signal
+- for byte-granular access to data bus
+- Plus 9 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Use: RMW cycle instead of SEL_O() signal
+--                         for byte-granular access to data bus
+--     DIVIDER_EN:         enable divider
+--     IBUS_BURST_SIZE:    size of the burst
+--     IBUS_PREFETCH_SIZE: initiate read burst if number of words
+--                         left in the buffer is less than specified
+--     MUL_ARCH:           multiplier architecture (""dsp"", ""opt""
+--                         or ""seq"")
+--     START_ADDR:         address in program memory where execution
+--                         starts
+---------------------------------------------------------------------
+
+library ieee
+- Use: ieee.std_logic_1164.all
+
+## Entity: lxp32c_top
+
+## Architecture: rtl of lxp32c_top
+
+### Signals
+- lli_re: std_logic
+- lli_adr: std_logic_vector(29 downto 0)
+- lli_dat: std_logic_vector(31 downto 0)
+- lli_busy: std_logic
+
+## Functional Analysis
+
+- Uses reset signal(s): IBUS_BURST_SIZE, burst, rst_i, BURST_SIZE
+- Implements memory functionality
+- Implements interface or communication protocol
+- This appears to be a CPU component
+
+## Code Metrics
+- Line count: 123
+- Process count: 0
+- Signal count: 4
+
+## Summary
+- This appears to be a top-level module in the design.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'lxp32c_top.vhd' plays a specific role in the overall CPU architecture.
+","---------------------------------------------------------------------
+-- LXP32C CPU top-level module (C-series, with instruction cache)
+--
+-- Part of the LXP32 CPU
+--
+-- Copyright (c) 2016 by Alex I. Kuznetsov
+--
+-- This version uses Wishbone B3 interface for the instruction bus
+-- (IBUS). It is designed for high-latency program memory, such as
+-- external SDRAM chips.
+--
+-- Parameters:
+--     DBUS_RMW:           Use RMW cycle instead of SEL_O() signal
+--                         for byte-granular access to data bus
+--     DIVIDER_EN:         enable divider
+--     IBUS_BURST_SIZE:    size of the burst
+--     IBUS_PREFETCH_SIZE: initiate read burst if number of words
+--                         left in the buffer is less than specified
+--     MUL_ARCH:           multiplier architecture (""dsp"", ""opt""
+--                         or ""seq"")
+--     START_ADDR:         address in program memory where execution
+--                         starts
+---------------------------------------------------------------------
+
+library ieee;
+use ieee.std_logic_1164.all;
+
+entity lxp32c_top is
+	generic(
+		DBUS_RMW: boolean:=false;
+		DIVIDER_EN: boolean:=true;
+		IBUS_BURST_SIZE: integer:=16;
+		IBUS_PREFETCH_SIZE: integer:=32;
+		MUL_ARCH: string:=""dsp"";
+		START_ADDR: std_logic_vector(31 downto 0):=(others=>'0')
+	);
+	port(
+		clk_i: in std_logic;
+		rst_i: in std_logic;
+		
+		ibus_cyc_o: out std_logic;
+		ibus_stb_o: out std_logic;
+		ibus_cti_o: out std_logic_vector(2 downto 0);
+		ibus_bte_o: out std_logic_vector(1 downto 0);
+		ibus_ack_i: in std_logic;
+		ibus_adr_o: out std_logic_vector(29 downto 0);
+		ibus_dat_i: in std_logic_vector(31 downto 0);
+		
+		dbus_cyc_o: out std_logic;
+		dbus_stb_o: out std_logic;
+		dbus_we_o: out std_logic;
+		dbus_sel_o: out std_logic_vector(3 downto 0);
+		dbus_ack_i: in std_logic;
+		dbus_adr_o: out std_logic_vector(31 downto 2);
+		dbus_dat_o: out std_logic_vector(31 downto 0);
+		dbus_dat_i: in std_logic_vector(31 downto 0);
+		
+		irq_i: in std_logic_vector(7 downto 0)
+	);
+end entity;
+
+architecture rtl of lxp32c_top is
+
+signal lli_re: std_logic;
+signal lli_adr: std_logic_vector(29 downto 0);
+signal lli_dat: std_logic_vector(31 downto 0);
+signal lli_busy: std_logic;
+
+begin
+
+cpu_inst: entity work.lxp32_cpu(rtl)
+	generic map(
+		DBUS_RMW=>DBUS_RMW,
+		DIVIDER_EN=>DIVIDER_EN,
+		MUL_ARCH=>MUL_ARCH,
+		START_ADDR=>START_ADDR
+	)
+	port map(
+		clk_i=>clk_i,
+		rst_i=>rst_i,
+		
+		lli_re_o=>lli_re,
+		lli_adr_o=>lli_adr,
+		lli_dat_i=>lli_dat,
+		lli_busy_i=>lli_busy,
+		
+		dbus_cyc_o=>dbus_cyc_o,
+		dbus_stb_o=>dbus_stb_o,
+		dbus_we_o=>dbus_we_o,
+		dbus_sel_o=>dbus_sel_o,
+		dbus_ack_i=>dbus_ack_i,
+		dbus_adr_o=>dbus_adr_o,
+		dbus_dat_o=>dbus_dat_o,
+		dbus_dat_i=>dbus_dat_i,
+		
+		irq_i=>irq_i
+	);
+
+icache_inst: entity work.lxp32_icache(rtl)
+	generic map(
+		BURST_SIZE=>IBUS_BURST_SIZE,
+		PREFETCH_SIZE=>IBUS_PREFETCH_SIZE
+	)
+	port map(
+		clk_i=>clk_i,
+		rst_i=>rst_i,
+		
+		lli_re_i=>lli_re,
+		lli_adr_i=>lli_adr,
+		lli_dat_o=>lli_dat,
+		lli_busy_o=>lli_busy,
+		
+		wbm_cyc_o=>ibus_cyc_o,
+		wbm_stb_o=>ibus_stb_o,
+		wbm_cti_o=>ibus_cti_o,
+		wbm_bte_o=>ibus_bte_o,
+		wbm_ack_i=>ibus_ack_i,
+		wbm_adr_o=>ibus_adr_o,
+		wbm_dat_i=>ibus_dat_i
+	);
+
+end architecture;
+"
+"# VHDL Analysis for 'lxp32u_top.vhd'
+
+## File Comments
+- -------------------------------------------------------------------
+- LXP32U CPU top-level module (U-series, without instruction cache)
+- Part of the LXP32 CPU
+- Copyright (c) 2016 by Alex I. Kuznetsov
+- This version uses a Low Latency Interface for the instruction bus
+- (IBUS). It is designed for low-latency slaves such as on-chip
+- RAM blocks.
+- Parameters:
+- DBUS_RMW:           Use RMW cycle instead of SEL_O() signal
+- for byte-granular access to data bus
+- Plus 6 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Use: RMW cycle instead of SEL_O() signal
+--                         for byte-granular access to data bus
+--     DIVIDER_EN:         enable divider
+--     MUL_ARCH:           multiplier architecture (""dsp"", ""opt""
+--                         or ""seq"")
+--     START_ADDR:         address in program memory where execution
+--                         starts
+---------------------------------------------------------------------
+
+library ieee
+- Use: ieee.std_logic_1164.all
+
+## Entity: lxp32u_top
+
+## Architecture: rtl of lxp32u_top
+
+## Functional Analysis
+
+- Uses reset signal(s): rst_i
+- Implements memory functionality
+- Implements interface or communication protocol
+- This appears to be a CPU component
+
+## Code Metrics
+- Line count: 87
+- Process count: 0
+- Signal count: 0
+
+## Summary
+- This appears to be a top-level module in the design.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'lxp32u_top.vhd' plays a specific role in the overall CPU architecture.
+","---------------------------------------------------------------------
+-- LXP32U CPU top-level module (U-series, without instruction cache)
+--
+-- Part of the LXP32 CPU
+--
+-- Copyright (c) 2016 by Alex I. Kuznetsov
+--
+-- This version uses a Low Latency Interface for the instruction bus
+-- (IBUS). It is designed for low-latency slaves such as on-chip
+-- RAM blocks.
+--
+-- Parameters:
+--     DBUS_RMW:           Use RMW cycle instead of SEL_O() signal
+--                         for byte-granular access to data bus
+--     DIVIDER_EN:         enable divider
+--     MUL_ARCH:           multiplier architecture (""dsp"", ""opt""
+--                         or ""seq"")
+--     START_ADDR:         address in program memory where execution
+--                         starts
+---------------------------------------------------------------------
+
+library ieee;
+use ieee.std_logic_1164.all;
+
+entity lxp32u_top is
+	generic(
+		DBUS_RMW: boolean:=false;
+		DIVIDER_EN: boolean:=true;
+		MUL_ARCH: string:=""dsp"";
+		START_ADDR: std_logic_vector(31 downto 0):=(others=>'0')
+	);
+	port(
+		clk_i: in std_logic;
+		rst_i: in std_logic;
+		
+		lli_re_o: out std_logic;
+		lli_adr_o: out std_logic_vector(29 downto 0);
+		lli_dat_i: in std_logic_vector(31 downto 0);
+		lli_busy_i: in std_logic;
+		
+		dbus_cyc_o: out std_logic;
+		dbus_stb_o: out std_logic;
+		dbus_we_o: out std_logic;
+		dbus_sel_o: out std_logic_vector(3 downto 0);
+		dbus_ack_i: in std_logic;
+		dbus_adr_o: out std_logic_vector(31 downto 2);
+		dbus_dat_o: out std_logic_vector(31 downto 0);
+		dbus_dat_i: in std_logic_vector(31 downto 0);
+		
+		irq_i: in std_logic_vector(7 downto 0)
+	);
+end entity;
+
+architecture rtl of lxp32u_top is
+
+begin
+
+cpu_inst: entity work.lxp32_cpu(rtl)
+	generic map(
+		DBUS_RMW=>DBUS_RMW,
+		DIVIDER_EN=>DIVIDER_EN,
+		MUL_ARCH=>MUL_ARCH,
+		START_ADDR=>START_ADDR
+	)
+	port map(
+		clk_i=>clk_i,
+		rst_i=>rst_i,
+		
+		lli_re_o=>lli_re_o,
+		lli_adr_o=>lli_adr_o,
+		lli_dat_i=>lli_dat_i,
+		lli_busy_i=>lli_busy_i,
+		
+		dbus_cyc_o=>dbus_cyc_o,
+		dbus_stb_o=>dbus_stb_o,
+		dbus_we_o=>dbus_we_o,
+		dbus_sel_o=>dbus_sel_o,
+		dbus_ack_i=>dbus_ack_i,
+		dbus_adr_o=>dbus_adr_o,
+		dbus_dat_o=>dbus_dat_o,
+		dbus_dat_i=>dbus_dat_i,
+		
+		irq_i=>irq_i
+	);
+
+end architecture;
+"

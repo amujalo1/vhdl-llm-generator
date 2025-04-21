@@ -1,5 +1,73 @@
 "input","output"
-"Coprocessor  Part of the LXP32 test platform   Performs a simple arithmetic operation, uses interrupt to wake up the CPU.  Note: regardless of whether this description is synthesizable, it was designed exclusively for simulation purposes.","library ieee;
+"Coprocessor  Part of the LXP32 test platform   Performs a simple arithmetic operation, uses interrupt to wake up the CPU.  Note: regardless of whether this description is synthesizable, it was designed exclusively for simulation purposes.
+
+# VHDL Analysis for 'coprocessor.vhd'
+
+## File Comments
+- -------------------------------------------------------------------
+- Coprocessor
+- Part of the LXP32 test platform
+- Copyright (c) 2016 by Alex I. Kuznetsov
+- Performs a simple arithmetic operation, uses interrupt to wake
+- up the CPU.
+- Note: regardless of whether this description is synthesizable,
+- it was designed exclusively for simulation purposes.
+- -------------------------------------------------------------------
+
+## Libraries and Packages
+- Library: ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+
+## Entity: coprocessor
+
+## Architecture: rtl of coprocessor
+
+### Signals
+- value: unsigned(31 downto 0):=(others=>'0')
+- result: unsigned(31 downto 0):=(others=>'0')
+- cnt: integer range 0 to 50:=0
+- irq: std_logic:='0'
+
+### Processes
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: clk_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: clk_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+
+## Functional Analysis
+
+- Uses reset signal(s): rst_i
+- This appears to be a CPU component
+
+## Code Metrics
+- Line count: 98
+- Process count: 4
+- Signal count: 4
+
+## Summary
+- This module appears to be a general-purpose digital logic implementation.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'coprocessor.vhd' plays a specific role in the overall CPU architecture.
+","---------------------------------------------------------------------
+-- Coprocessor
+--
+-- Part of the LXP32 test platform
+--
+-- Copyright (c) 2016 by Alex I. Kuznetsov
+--
+-- Performs a simple arithmetic operation, uses interrupt to wake
+-- up the CPU.
+--
+-- Note: regardless of whether this description is synthesizable,
+-- it was designed exclusively for simulation purposes.
+---------------------------------------------------------------------
+
+library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
@@ -81,8 +149,78 @@ wbs_dat_o<=std_logic_vector(value) when wbs_adr_i=""00""&X""000000"" else
 
 irq_o<=irq;
 
-end architecture;"
-"DBUS monitor  Part of the LXP32 test platform   Monitors LXP32 data bus transactions, optionally throttles them.  Note: regardless of whether this description is synthesizable, it was designed exclusively for simulation purposes.","library ieee;
+end architecture;
+"
+"DBUS monitor  Part of the LXP32 test platform   Monitors LXP32 data bus transactions, optionally throttles them.  Note: regardless of whether this description is synthesizable, it was designed exclusively for simulation purposes.
+
+# VHDL Analysis for 'dbus_monitor.vhd'
+
+## File Comments
+- -------------------------------------------------------------------
+- DBUS monitor
+- Part of the LXP32 test platform
+- Copyright (c) 2016 by Alex I. Kuznetsov
+- Monitors LXP32 data bus transactions, optionally throttles them.
+- Note: regardless of whether this description is synthesizable,
+- it was designed exclusively for simulation purposes.
+- -------------------------------------------------------------------
+- Manage throttling
+- CPU interface
+- Plus 2 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Use: ieee.std_logic_1164.all
+
+## Entity: dbus_monitor
+
+## Architecture: rtl of dbus_monitor
+
+### Signals
+- prbs: std_logic
+- cycle: std_logic:='0'
+- cyc_ff: std_logic:='0'
+- ack_ff: std_logic:='0'
+
+### Processes
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: clk_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: clk_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+
+## Functional Analysis
+
+- Uses reset signal(s): rst_i
+- Implements interface or communication protocol
+- This appears to be a CPU component
+
+## Code Metrics
+- Line count: 118
+- Process count: 4
+- Signal count: 4
+
+## Summary
+- This module appears to be a general-purpose digital logic implementation.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'dbus_monitor.vhd' plays a specific role in the overall CPU architecture.
+","---------------------------------------------------------------------
+-- DBUS monitor
+--
+-- Part of the LXP32 test platform
+--
+-- Copyright (c) 2016 by Alex I. Kuznetsov
+--
+-- Monitors LXP32 data bus transactions, optionally throttles them.
+--
+-- Note: regardless of whether this description is synthesizable,
+-- it was designed exclusively for simulation purposes.
+---------------------------------------------------------------------
+
+library ieee;
 use ieee.std_logic_1164.all;
 
 entity dbus_monitor is
@@ -123,6 +261,7 @@ signal ack_ff: std_logic:='0';
 
 begin
 
+-- Manage throttling
 
 gen_throttling: if THROTTLE generate
 	throttle_inst: entity work.scrambler(rtl)
@@ -134,10 +273,12 @@ gen_no_throttling: if not THROTTLE generate
 	prbs<='0';
 end generate;
 
+-- CPU interface
 
 wbs_ack_o<=wbm_ack_i;
 wbs_dat_o<=wbm_dat_i when wbm_ack_i='1' else (others=>'-');
 
+-- Interconnect interface
 
 process (clk_i) is
 begin
@@ -159,6 +300,7 @@ wbm_sel_o<=wbs_sel_i;
 wbm_adr_o<=wbs_adr_i;
 wbm_dat_o<=wbs_dat_i;
 
+-- Check handshake correctness
 
 process (clk_i) is
 begin
@@ -181,8 +323,132 @@ begin
 	end if;
 end process;
 
-end architecture;"
-"Generic FPGA memory block   Portable description of a dual-port memory block with one write port.  Parameters: * DATA_WIDTH:  data port width * ADDR_WIDTH:  address port width * SIZE:        memory size * MODE:        read/write synchronization mode for port A DONTCARE: choose the most efficient design WR_FIRST: feed written value to the output RD_FIRST: read old value NOCHANGE: don't change output during write","library ieee;
+end architecture;
+"
+"Generic FPGA memory block   Portable description of a dual-port memory block with one write port.  Parameters: * DATA_WIDTH:  data port width * ADDR_WIDTH:  address port width * SIZE:        memory size * MODE:        read/write synchronization mode for port A DONTCARE: choose the most efficient design WR_FIRST: feed written value to the output RD_FIRST: read old value NOCHANGE: don't change output during write
+
+# VHDL Analysis for 'generic_dpram.vhd'
+
+## File Comments
+- -------------------------------------------------------------------
+- Generic FPGA memory block
+- Copyright (c) 2015 by Alex I. Kuznetsov
+- Portable description of a dual-port memory block with one write
+- port.
+- Parameters:
+- * DATA_WIDTH:  data port width
+- * ADDR_WIDTH:  address port width
+- * SIZE:        memory size
+- * MODE:        read/write synchronization mode for port A
+- Plus 9 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+
+## Entity: generic_dpram
+
+## Architecture: rtl of generic_dpram
+
+### Signals
+- ram: ram_type
+- is ""no_rw_check"";
+attribute ram_style: string
+- is ""block"";
+
+begin
+
+-- Ensure that generics have valid values
+
+assert SIZE<=2**ADDR_WIDTH
+	report ""SIZE must be less or equal than 2^ADDR_WIDTH""
+	severity failure;
+
+assert MODE=""DONTCARE"" or MODE=""WR_FIRST"" or MODE=""RD_FIRST"" or MODE=""NOCHANGE""
+	report ""Unrecognized MODE value (DONTCARE: if MODE=""DONTCARE"" generate
+	process (clka_i) is
+	begin
+		if rising_edge(clka_i) then
+			if cea_i='1' then
+				if wea_i='1' then
+					ram(to_integer(unsigned(addra_i)))<=da_i
+- WR_FIRST: if MODE=""DONTCARE"" generate
+	process (clka_i) is
+	begin
+		if rising_edge(clka_i) then
+			if cea_i='1' then
+				if wea_i='1' then
+					ram(to_integer(unsigned(addra_i)))<=da_i
+- RD_FIRST or NOCHANGE expected)""
+	severity failure;
+
+-- Port A (read/write)
+
+port_a_dont_care_gen: if MODE=""DONTCARE"" generate
+	process (clka_i) is
+	begin
+		if rising_edge(clka_i) then
+			if cea_i='1' then
+				if wea_i='1' then
+					ram(to_integer(unsigned(addra_i)))<=da_i
+
+### Processes
+- Process 'Unnamed process' (Clocked) with sensitivity list: clka_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) with sensitivity list: clka_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) with sensitivity list: clka_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) with sensitivity list: clka_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) with sensitivity list: clkb_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+
+## Functional Analysis
+
+- Uses reset signal(s): RD_FIRST, port_a_write_first_gen, port_a_read_first_gen, WR_FIRST
+- Implements memory functionality
+
+## Code Metrics
+- Line count: 163
+- Process count: 10
+- Signal count: 5
+
+## Summary
+- This module implements memory functionality.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'generic_dpram.vhd' plays a specific role in the overall CPU architecture.
+","---------------------------------------------------------------------
+-- Generic FPGA memory block
+--
+-- Copyright (c) 2015 by Alex I. Kuznetsov
+--
+-- Portable description of a dual-port memory block with one write
+-- port.
+--
+-- Parameters:
+--     * DATA_WIDTH:  data port width
+--     * ADDR_WIDTH:  address port width
+--     * SIZE:        memory size
+--     * MODE:        read/write synchronization mode for port A
+--                      DONTCARE: choose the most efficient design
+--                      WR_FIRST: feed written value to the output
+--                      RD_FIRST: read old value 
+--                      NOCHANGE: don't change output during write
+---------------------------------------------------------------------
+
+library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
@@ -220,6 +486,7 @@ attribute ram_style of ram: signal is ""block"";
 
 begin
 
+-- Ensure that generics have valid values
 
 assert SIZE<=2**ADDR_WIDTH
 	report ""SIZE must be less or equal than 2^ADDR_WIDTH""
@@ -229,6 +496,7 @@ assert MODE=""DONTCARE"" or MODE=""WR_FIRST"" or MODE=""RD_FIRST"" or MODE=""NOC
 	report ""Unrecognized MODE value (DONTCARE, WR_FIRST, RD_FIRST or NOCHANGE expected)""
 	severity failure;
 
+-- Port A (read/write)
 
 port_a_dont_care_gen: if MODE=""DONTCARE"" generate
 	process (clka_i) is
@@ -307,6 +575,7 @@ port_a_no_change_gen: if MODE=""NOCHANGE"" generate
 	end process;
 end generate;
 
+-- Port B (read only)
 
 process (clkb_i) is
 begin
@@ -321,8 +590,81 @@ begin
 	end if;
 end process;
 
-end architecture;"
-"IBUS adapter  Part of the LXP32 test platform   Converts the Low Latency Interface to WISHBONE registered feedback protocol.  Note: regardless of whether this description is synthesizable, it was designed exclusively for simulation purposes.","library ieee;
+end architecture;
+"
+"IBUS adapter  Part of the LXP32 test platform   Converts the Low Latency Interface to WISHBONE registered feedback protocol.  Note: regardless of whether this description is synthesizable, it was designed exclusively for simulation purposes.
+
+# VHDL Analysis for 'ibus_adapter.vhd'
+
+## File Comments
+- -------------------------------------------------------------------
+- IBUS adapter
+- Part of the LXP32 test platform
+- Copyright (c) 2016 by Alex I. Kuznetsov
+- Converts the Low Latency Interface to WISHBONE registered
+- feedback protocol.
+- Note: regardless of whether this description is synthesizable,
+- it was designed exclusively for simulation purposes.
+- -------------------------------------------------------------------
+- Insert burst delay
+- Plus 3 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+
+## Entity: ibus_adapter
+
+## Architecture: rtl of ibus_adapter
+
+### Signals
+- burst_delay_cnt: integer:=0
+- delay_burst: std_logic
+- re: std_logic
+- requested: std_logic:='0'
+- adr: unsigned(29 downto 0)
+- ack: std_logic
+
+### Processes
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: clk_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: clk_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+
+## Functional Analysis
+
+- Uses reset signal(s): burst_delay_cnt, delay_burst, rst_i, burst_delay, burst
+- Implements interface or communication protocol
+
+## Code Metrics
+- Line count: 102
+- Process count: 4
+- Signal count: 6
+
+## Summary
+- This module appears to be a general-purpose digital logic implementation.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'ibus_adapter.vhd' plays a specific role in the overall CPU architecture.
+","---------------------------------------------------------------------
+-- IBUS adapter
+--
+-- Part of the LXP32 test platform
+--
+-- Copyright (c) 2016 by Alex I. Kuznetsov
+--
+-- Converts the Low Latency Interface to WISHBONE registered
+-- feedback protocol.
+--
+-- Note: regardless of whether this description is synthesizable,
+-- it was designed exclusively for simulation purposes.
+---------------------------------------------------------------------
+
+library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
@@ -359,6 +701,7 @@ signal ack: std_logic;
 
 begin
 
+-- Insert burst delay
 
 process (clk_i) is
 begin
@@ -375,6 +718,7 @@ end process;
 
 delay_burst<='1' when burst_delay_cnt/=0 else '0';
 
+-- Generate ACK signal
 
 process (clk_i) is
 begin
@@ -389,6 +733,7 @@ end process;
 
 ack<=requested and not lli_busy_i;
 
+-- Generate LLI signals
 
 re<=(ibus_cyc_i and ibus_stb_i and not delay_burst) when ack='0' or
 	(ibus_cti_i=""010"" and ibus_bte_i=""00"") else '0';
@@ -400,12 +745,94 @@ adr<=unsigned(ibus_adr_i) when re='1' and ack='0' else
 lli_re_o<=re;
 lli_adr_o<=std_logic_vector(adr);
 
+-- Generate IBUS signals
 
 ibus_ack_o<=ack;
 ibus_dat_o<=lli_dat_i when ack='1' else (others=>'-');
 
-end architecture;"
-"Simple WISHBONE interconnect  Generated by wigen at Sat Nov  2 11:45:49 2024  Configuration: Number of masters:     2 Number of slaves:      5 Master address width:  32 Slave address width:   28 Port size:             32 Port granularity:      8 Entity name:           intercon Pipelined arbiter:     no Registered feedback:   no Unsafe slave decoder:  no  Command line: wigen -e intercon 2 5 32 28 32 8","library ieee;
+end architecture;
+"
+"Simple WISHBONE interconnect  Generated by wigen at Sat Nov  2 11:45:49 2024  Configuration: Number of masters:     2 Number of slaves:      5 Master address width:  32 Slave address width:   28 Port size:             32 Port granularity:      8 Entity name:           intercon Pipelined arbiter:     no Registered feedback:   no Unsafe slave decoder:  no  Command line: wigen -e intercon 2 5 32 28 32 8
+
+# VHDL Analysis for 'intercon.vhd'
+
+## File Comments
+- -------------------------------------------------------------------
+- Simple WISHBONE interconnect
+- Generated by wigen at Sat Nov  2 11:45:49 2024
+- Configuration:
+- Number of masters:     2
+- Number of slaves:      5
+- Master address width:  32
+- Slave address width:   28
+- Port size:             32
+- Port granularity:      8
+- Plus 16 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Use: ieee.std_logic_1164.all
+
+## Entity: intercon
+
+## Architecture: rtl of intercon
+
+### Signals
+- request: std_logic_vector(1 downto 0)
+- grant_next: std_logic_vector(1 downto 0)
+- grant: std_logic_vector(1 downto 0)
+- grant_reg: std_logic_vector(1 downto 0):=(others=>'0')
+- select_slave: std_logic_vector(5 downto 0)
+- cyc_mux: std_logic
+- stb_mux: std_logic
+- we_mux: std_logic
+- sel_mux: std_logic_vector(3 downto 0)
+- adr_mux: std_logic_vector(31 downto 2)
+- wdata_mux: std_logic_vector(31 downto 0)
+- ack_mux: std_logic
+- rdata_mux: std_logic_vector(31 downto 0)
+
+### Processes
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: clk_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+
+## Functional Analysis
+
+- Uses reset signal(s): rst_i
+
+## Code Metrics
+- Line count: 235
+- Process count: 2
+- Signal count: 13
+
+## Summary
+- This module appears to be a general-purpose digital logic implementation.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'intercon.vhd' plays a specific role in the overall CPU architecture.
+","---------------------------------------------------------------------
+-- Simple WISHBONE interconnect
+--
+-- Generated by wigen at Sat Nov  2 11:45:49 2024
+--
+-- Configuration:
+--     Number of masters:     2
+--     Number of slaves:      5
+--     Master address width:  32
+--     Slave address width:   28
+--     Port size:             32
+--     Port granularity:      8
+--     Entity name:           intercon
+--     Pipelined arbiter:     no
+--     Registered feedback:   no
+--     Unsafe slave decoder:  no
+--
+-- Command line:
+--     wigen -e intercon 2 5 32 28 32 8
+---------------------------------------------------------------------
+
+library ieee;
 use ieee.std_logic_1164.all;
 
 entity intercon is
@@ -499,6 +926,9 @@ signal rdata_mux: std_logic_vector(31 downto 0);
 
 begin
 
+-- ARBITER
+-- Selects the active master. Masters with lower port numbers
+-- have higher priority. Ongoing cycles are not interrupted.
 
 request<=s1_cyc_i&s0_cyc_i;
 
@@ -519,6 +949,7 @@ begin
 	end if;
 end process;
 
+-- MASTER->SLAVE MUX
 
 cyc_mux<=(s0_cyc_i and grant(0)) or
 	(s1_cyc_i and grant(1));
@@ -544,6 +975,7 @@ wdata_mux_gen: for i in wdata_mux'range generate
 		(s1_dat_i(i) and grant(1));
 end generate;
 
+-- MASTER->SLAVE DEMUX
 
 select_slave<=""000001"" when adr_mux(31 downto 28)=""0000"" else
 	""000010"" when adr_mux(31 downto 28)=""0001"" else
@@ -587,6 +1019,7 @@ m4_sel_o<=sel_mux;
 m4_adr_o<=adr_mux(m4_adr_o'range);
 m4_dat_o<=wdata_mux;
 
+-- SLAVE->MASTER MUX
 
 ack_mux<=(m0_ack_i and select_slave(0)) or
 	(m1_ack_i and select_slave(1)) or
@@ -603,6 +1036,7 @@ rdata_mux_gen: for i in rdata_mux'range generate
 		(m4_dat_i(i) and select_slave(4));
 end generate;
 
+-- SLAVE->MASTER DEMUX
 
 s0_ack_o<=ack_mux and grant(0);
 s0_dat_o<=rdata_mux;
@@ -610,8 +1044,81 @@ s0_dat_o<=rdata_mux;
 s1_ack_o<=ack_mux and grant(1);
 s1_dat_o<=rdata_mux;
 
-end architecture;"
-"LXP32 platform top-level design unit  Part of the LXP32 test platform   A SoC-like simulation platform for the LXP32 CPU, containing a few peripherals such as program RAM, timer and coprocessor.  Note: regardless of whether this description is synthesizable, it was designed exclusively for simulation purposes.","library ieee;
+end architecture;
+"
+"LXP32 platform top-level design unit  Part of the LXP32 test platform   A SoC-like simulation platform for the LXP32 CPU, containing a few peripherals such as program RAM, timer and coprocessor.  Note: regardless of whether this description is synthesizable, it was designed exclusively for simulation purposes.
+
+# VHDL Analysis for 'platform.vhd'
+
+## File Comments
+- -------------------------------------------------------------------
+- LXP32 platform top-level design unit
+- Part of the LXP32 test platform
+- Copyright (c) 2016 by Alex I. Kuznetsov
+- A SoC-like simulation platform for the LXP32 CPU, containing
+- a few peripherals such as program RAM, timer and coprocessor.
+- Note: regardless of whether this description is synthesizable,
+- it was designed exclusively for simulation purposes.
+- -------------------------------------------------------------------
+- Interconnect
+- Plus 8 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Use: ieee.std_logic_1164.all
+
+## Entity: platform
+
+## Architecture: rtl of platform
+
+### Signals
+- cpu_rst: std_logic
+- cpu_irq: std_logic_vector(7 downto 0)
+- cpu_dbus: wbm_type
+- cpu_ibus: ibus_type
+- lli_re: std_logic
+- lli_adr: std_logic_vector(29 downto 0)
+- lli_dat: std_logic_vector(31 downto 0)
+- lli_busy: std_logic
+- monitor_dbus: wbm_type
+- ram_wb: wbs_type
+- timer_wb: wbs_type
+- timer_elapsed: std_logic
+- coprocessor_wb: wbs_type
+- coprocessor_irq: std_logic
+- timer2_wb: wbs_type
+- timer2_irq: std_logic
+
+## Functional Analysis
+
+- Uses reset signal(s): cpu_rst, cpu_rst_i, IBUS_BURST_SIZE, rst_i
+- Implements memory functionality
+- This appears to be a CPU component
+
+## Code Metrics
+- Line count: 388
+- Process count: 0
+- Signal count: 16
+
+## Summary
+- This appears to be a top-level module in the design.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'platform.vhd' plays a specific role in the overall CPU architecture.
+","---------------------------------------------------------------------
+-- LXP32 platform top-level design unit
+--
+-- Part of the LXP32 test platform
+--
+-- Copyright (c) 2016 by Alex I. Kuznetsov
+--
+-- A SoC-like simulation platform for the LXP32 CPU, containing
+-- a few peripherals such as program RAM, timer and coprocessor.
+--
+-- Note: regardless of whether this description is synthesizable,
+-- it was designed exclusively for simulation purposes.
+---------------------------------------------------------------------
+
+library ieee;
 use ieee.std_logic_1164.all;
 
 entity platform is
@@ -708,6 +1215,7 @@ signal timer2_irq: std_logic;
 
 begin
 
+-- Interconnect
 
 intercon_inst: entity work.intercon(rtl)
 	port map(
@@ -778,9 +1286,12 @@ intercon_inst: entity work.intercon(rtl)
 		m4_dat_i=>timer2_wb.rdata
 	);
 
+-- CPU
 
 cpu_rst<=cpu_rst_i or rst_i;
 
+-- Note: we connect the timer IRQ to 2 CPU channels to test
+-- handling of simultaneously arriving interrupt requests.
 
 cpu_irq<=""0000""&timer2_irq&coprocessor_irq&timer_elapsed&timer_elapsed;
 
@@ -868,6 +1379,7 @@ gen_lxp32c: if MODEL_LXP32C generate
 		);
 end generate;
 
+-- DBUS monitor
 
 dbus_monitor_inst: entity work.dbus_monitor(rtl)
 	generic map(
@@ -896,6 +1408,7 @@ dbus_monitor_inst: entity work.dbus_monitor(rtl)
 		wbm_dat_i=>monitor_dbus.rdata
 	);
 
+-- Program RAM
 
 program_ram_inst: entity work.program_ram(rtl)
 	generic map(
@@ -920,6 +1433,7 @@ program_ram_inst: entity work.program_ram(rtl)
 		lli_busy_o=>lli_busy
 	);
 
+-- Timer
 
 timer_inst: entity work.timer(rtl)
 	port map(
@@ -938,6 +1452,7 @@ timer_inst: entity work.timer(rtl)
 		elapsed_o=>timer_elapsed
 	);
 
+-- Timer with a level-sensitive IRQ
 
 timer2_inst: entity work.timer(rtl)
 	port map(
@@ -956,6 +1471,7 @@ timer2_inst: entity work.timer(rtl)
 		elapsed_o=>timer2_irq
 	);
 
+-- Coprocessor
 
 coprocessor_inst: entity work.coprocessor(rtl)
 	port map(
@@ -974,8 +1490,91 @@ coprocessor_inst: entity work.coprocessor(rtl)
 		irq_o=>coprocessor_irq
 	);
 
-end architecture;"
-"Program RAM  Part of the LXP32 test platform   Program RAM for the LXP32 test platform. Has two interfaces: WISHBONE (for data access) and LLI (for LXP32 instruction bus). Optionally performs throttling.  Note: regardless of whether this description is synthesizable, it was designed exclusively for simulation purposes.","library ieee;
+end architecture;
+"
+"Program RAM  Part of the LXP32 test platform   Program RAM for the LXP32 test platform. Has two interfaces: WISHBONE (for data access) and LLI (for LXP32 instruction bus). Optionally performs throttling.  Note: regardless of whether this description is synthesizable, it was designed exclusively for simulation purposes.
+
+# VHDL Analysis for 'program_ram.vhd'
+
+## File Comments
+- -------------------------------------------------------------------
+- Program RAM
+- Part of the LXP32 test platform
+- Copyright (c) 2016 by Alex I. Kuznetsov
+- Program RAM for the LXP32 test platform. Has two interfaces:
+- WISHBONE (for data access) and LLI (for LXP32 instruction bus).
+- Optionally performs throttling.
+- Note: regardless of whether this description is synthesizable,
+- it was designed exclusively for simulation purposes.
+- -------------------------------------------------------------------
+- Plus 3 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Use: ieee.std_logic_1164.all
+- Use: work.common_pkg.all
+
+## Entity: program_ram
+
+## Architecture: rtl of program_ram
+
+### Signals
+- ram_a_we: std_logic_vector(3 downto 0)
+- ram_a_rdata: std_logic_vector(31 downto 0)
+- ram_b_re: std_logic
+- ram_b_rdata: std_logic_vector(31 downto 0)
+- ack_write: std_logic
+- ack_read: std_logic
+- prbs: std_logic
+- lli_busy: std_logic:='0'
+
+### Processes
+- Process 'Unnamed process' (Clocked) with sensitivity list: clk_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) with sensitivity list: clk_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: clk_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+
+## Functional Analysis
+
+- Uses reset signal(s): rst_i
+- Implements memory functionality
+- Implements interface or communication protocol
+- This appears to be a CPU component
+- Implements instruction fetching functionality
+
+## Code Metrics
+- Line count: 146
+- Process count: 6
+- Signal count: 8
+
+## Summary
+- This module implements memory functionality.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'program_ram.vhd' plays a specific role in the overall CPU architecture.
+","---------------------------------------------------------------------
+-- Program RAM
+--
+-- Part of the LXP32 test platform
+--
+-- Copyright (c) 2016 by Alex I. Kuznetsov
+--
+-- Program RAM for the LXP32 test platform. Has two interfaces:
+-- WISHBONE (for data access) and LLI (for LXP32 instruction bus).
+-- Optionally performs throttling.
+--
+-- Note: regardless of whether this description is synthesizable,
+-- it was designed exclusively for simulation purposes.
+---------------------------------------------------------------------
+
+library ieee;
 use ieee.std_logic_1164.all;
 
 use work.common_pkg.all;
@@ -1020,6 +1619,7 @@ signal lli_busy: std_logic:='0';
 
 begin
 
+-- The total memory size is 16384 words, i.e. 64K bytes
 
 gen_dprams: for i in 3 downto 0 generate
 	generic_dpram_inst: entity work.generic_dpram(rtl)
@@ -1044,6 +1644,7 @@ gen_dprams: for i in 3 downto 0 generate
 		);
 end generate;
 
+-- WISHBONE interface
 
 gen_ram_a_we: for i in 3 downto 0 generate
 	ram_a_we(i)<='1' when wbs_cyc_i='1' and wbs_stb_i='1' and wbs_we_i='1'
@@ -1062,6 +1663,7 @@ ack_write<=wbs_cyc_i and wbs_stb_i and wbs_we_i;
 wbs_ack_o<=ack_read or ack_write;
 wbs_dat_o<=ram_a_rdata;
 
+-- Low Latency Interface (with optional pseudo-random throttling)
 
 process (clk_i) is
 begin
@@ -1101,8 +1703,74 @@ ram_b_re<=lli_re_i and not lli_busy;
 lli_busy_o<=lli_busy;
 lli_dat_o<=ram_b_rdata when lli_busy='0' else (others=>'-');
 
-end architecture;"
-"Scrambler  Part of the LXP32 test platform   Generates a pseudo-random binary sequence using a Linear-Feedback Shift Register (LFSR).  In order to generate a maximum-length sequence, 1+x^TAP1+x^TAP2 must be a primitive polynomial. Typical polynomials include: (6,7), (9,11), (14,15).  Note: regardless of whether this description is synthesizable, it was designed exclusively for simulation purposes.","library ieee;
+end architecture;
+"
+"Scrambler  Part of the LXP32 test platform   Generates a pseudo-random binary sequence using a Linear-Feedback Shift Register (LFSR).  In order to generate a maximum-length sequence, 1+x^TAP1+x^TAP2 must be a primitive polynomial. Typical polynomials include: (6,7), (9,11), (14,15).  Note: regardless of whether this description is synthesizable, it was designed exclusively for simulation purposes.
+
+# VHDL Analysis for 'scrambler.vhd'
+
+## File Comments
+- -------------------------------------------------------------------
+- Scrambler
+- Part of the LXP32 test platform
+- Copyright (c) 2016 by Alex I. Kuznetsov
+- Generates a pseudo-random binary sequence using a Linear-Feedback
+- Shift Register (LFSR).
+- In order to generate a maximum-length sequence, 1+x^TAP1+x^TAP2
+- must be a primitive polynomial. Typical polynomials include:
+- (6,7), (9,11), (14,15).
+- Note: regardless of whether this description is synthesizable,
+- Plus 2 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Use: ieee.std_logic_1164.all
+
+## Entity: scrambler
+
+## Architecture: rtl of scrambler
+
+### Signals
+- reg: std_logic_vector(TAP2 downto 1):=(others=>'1')
+
+### Processes
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: clk_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+
+## Functional Analysis
+
+- Uses reset signal(s): rst_i
+
+## Code Metrics
+- Line count: 55
+- Process count: 2
+- Signal count: 1
+
+## Summary
+- This module implements register or flip-flop functionality.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'scrambler.vhd' plays a specific role in the overall CPU architecture.
+","---------------------------------------------------------------------
+-- Scrambler
+--
+-- Part of the LXP32 test platform
+--
+-- Copyright (c) 2016 by Alex I. Kuznetsov
+--
+-- Generates a pseudo-random binary sequence using a Linear-Feedback
+-- Shift Register (LFSR).
+--
+-- In order to generate a maximum-length sequence, 1+x^TAP1+x^TAP2
+-- must be a primitive polynomial. Typical polynomials include:
+-- (6,7), (9,11), (14,15).
+--
+-- Note: regardless of whether this description is synthesizable,
+-- it was designed exclusively for simulation purposes.
+---------------------------------------------------------------------
+
+library ieee;
 use ieee.std_logic_1164.all;
 
 entity scrambler is
@@ -1137,8 +1805,72 @@ end process;
 
 d_o<=reg(1);
 
-end architecture;"
-"Timer  Part of the LXP32 test platform   A simple programmable interval timer.  Note: regardless of whether this description is synthesizable, it was designed exclusively for simulation purposes.","library ieee;
+end architecture;
+"
+"Timer  Part of the LXP32 test platform   A simple programmable interval timer.  Note: regardless of whether this description is synthesizable, it was designed exclusively for simulation purposes.
+
+# VHDL Analysis for 'timer.vhd'
+
+## File Comments
+- -------------------------------------------------------------------
+- Timer
+- Part of the LXP32 test platform
+- Copyright (c) 2016 by Alex I. Kuznetsov
+- A simple programmable interval timer.
+- Note: regardless of whether this description is synthesizable,
+- it was designed exclusively for simulation purposes.
+- -------------------------------------------------------------------
+
+## Libraries and Packages
+- Library: ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+
+## Entity: timer
+
+## Architecture: rtl of timer
+
+### Signals
+- irq_level_triggered: std_logic:='0'
+- irq_invert: std_logic:='0'
+- pulses: unsigned(31 downto 0):=(others=>'0')
+- interval: unsigned(31 downto 0):=(others=>'0')
+- cnt: unsigned(31 downto 0):=(others=>'0')
+- elapsed: std_logic:='0'
+
+### Processes
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: clk_i
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+
+## Functional Analysis
+
+- Uses reset signal(s): rst_i
+
+## Code Metrics
+- Line count: 111
+- Process count: 2
+- Signal count: 6
+
+## Summary
+- This module appears to be a general-purpose digital logic implementation.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'timer.vhd' plays a specific role in the overall CPU architecture.
+","---------------------------------------------------------------------
+-- Timer
+--
+-- Part of the LXP32 test platform
+--
+-- Copyright (c) 2016 by Alex I. Kuznetsov
+--
+-- A simple programmable interval timer.
+--
+-- Note: regardless of whether this description is synthesizable,
+-- it was designed exclusively for simulation purposes.
+---------------------------------------------------------------------
+
+library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
@@ -1234,4 +1966,5 @@ wbs_dat_o<=std_logic_vector(pulses) when wbs_adr_i=""00""&X""000000"" else
 
 elapsed_o<=elapsed xor irq_invert;
 
-end architecture;"
+end architecture;
+"

@@ -1,5 +1,71 @@
 "input","output"
-"This entity implements a priority arbiter. The left-most bit (highest bit) of the request vector that was asserted is granted (i.e. asserted in the grant  vector). The arbiter is implemented using the very logic-and timing-efficient parallel prefix computation approach. The arbiter can be implemented with or without an output registers. The waveform below shows its implementation with andwithout output register (_Latency\_g = 0_ resp. 1).","
+"This entity implements a priority arbiter. The left-most bit (highest bit) of the request vector that was asserted is granted (i.e. asserted in the grant  vector). The arbiter is implemented using the very logic-and timing-efficient parallel prefix computation approach. The arbiter can be implemented with or without an output registers. The waveform below shows its implementation with andwithout output register (_Latency\_g = 0_ resp. 1).
+
+# VHDL Analysis for 'olo_base_arb_prio.vhd'
+
+## File Comments
+- -------------------------------------------------------------------------------------------------
+- Copyright (c) 2018 by Paul Scherrer Institute, Switzerland
+- Copyright (c) 2024 by Oliver Bründler
+- All rights reserved.
+- Authors: Oliver Bruendler
+- -------------------------------------------------------------------------------------------------
+- -------------------------------------------------------------------------------------------------
+- Description
+- -------------------------------------------------------------------------------------------------
+- This entity implements an efficient priority arbiter. The highest index of
+- Plus 21 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Library: work
+- Use: an older version, the documentation might not match the code.
+
+---------------------------------------------------------------------------------------------------
+-- Libraries
+---------------------------------------------------------------------------------------------------
+library ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+- Use: ieee.math_real.all
+- Use: work.olo_base_pkg_math.all
+- Use: work.olo_base_pkg_logic.all
+
+## Entity: olo_base_arb_prio
+
+## Architecture: rtl of olo_base_arb_prio
+
+### Signals
+- Grant_I: std_logic_vector(Out_Grant'range)
+- RdPipe: Data_t(1 to Latency_g)
+
+### Processes
+- Process 'p_comb :' with sensitivity list: In_Req
+- Process 'p_outreg :' (Clocked) (Has Reset) with sensitivity list: Clk
+  - Implements synchronous logic
+- Process 'p_comb :' with sensitivity list: None (uses wait statements)
+- Process 'p_outreg :' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+
+### Concurrent Statements
+- -- Calculate Grant with Edge Detection
+            Grant_I <= OredRequest_v and not ('0' & OredRequest_v(OredRequest_v'high downto 1))
+
+## Functional Analysis
+
+- Contains 1 clock domain(s): Clk
+- Uses reset signal(s): Rst
+
+## Code Metrics
+- Line count: 101
+- Process count: 4
+- Signal count: 2
+
+## Summary
+- This module appears to be a general-purpose digital logic implementation.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'olo_base_arb_prio.vhd' plays a specific role in the overall CPU architecture.
+","
 
 library ieee;
     use ieee.std_logic_1164.all;
@@ -66,7 +132,87 @@ begin
     end generate;
 
 end architecture;"
-"This entity implements a round-robin arbiter. If multiple bits are asserted in the _In_Req_ vector, the left-most bit is forwarded to the grant vector first. Next, the second left-most bit that is set is forwarded etc. Whenever at least one bit in the _Out_Grant_ vector is asserted, the _Out_Valid_ handshaking signal is asserted to signal that a request was granted. The consumer of the _Out_Grant_ vector signalizes that the granted access was executed by pulling _Out\_Ready_ high. Note that the round-robin arbiter is implemented without an output register. Therefore combinatorial paths between input and output exist and it is recommended to add a register-stage to the output as early as possible. Especially interesting is the part in orange. At this point the arbiter does not grant access to bit 3 because it already granted this request in the clock cycle before. However, it continues to grant access to the highest-priority (i.e. left-most) bit of the request vector that is still left of the bit set in the last _Out_Grant_ output. If the _In_Req_ vector asserts a higher priority this change is directly forwarded to the output. This is shown in the orange section of the waveform.","
+"This entity implements a round-robin arbiter. If multiple bits are asserted in the _In_Req_ vector, the left-most bit is forwarded to the grant vector first. Next, the second left-most bit that is set is forwarded etc. Whenever at least one bit in the _Out_Grant_ vector is asserted, the _Out_Valid_ handshaking signal is asserted to signal that a request was granted. The consumer of the _Out_Grant_ vector signalizes that the granted access was executed by pulling _Out\_Ready_ high. Note that the round-robin arbiter is implemented without an output register. Therefore combinatorial paths between input and output exist and it is recommended to add a register-stage to the output as early as possible. Especially interesting is the part in orange. At this point the arbiter does not grant access to bit 3 because it already granted this request in the clock cycle before. However, it continues to grant access to the highest-priority (i.e. left-most) bit of the request vector that is still left of the bit set in the last _Out_Grant_ output. If the _In_Req_ vector asserts a higher priority this change is directly forwarded to the output. This is shown in the orange section of the waveform.
+
+# VHDL Analysis for 'olo_base_arb_rr.vhd'
+
+## File Comments
+- -------------------------------------------------------------------------------------------------
+- Copyright (c) 2018 by Paul Scherrer Institute, Switzerland
+- Copyright (c) 2024 by Oliver Bründler
+- All rights reserved.
+- Authors: Oliver Bruendler
+- -------------------------------------------------------------------------------------------------
+- -------------------------------------------------------------------------------------------------
+- Description
+- -------------------------------------------------------------------------------------------------
+- This entity implements an efficient round-robin arbiter.
+- Plus 22 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Library: work
+- Use: an older version, the documentation might not match the code.
+
+---------------------------------------------------------------------------------------------------
+-- Libraries
+---------------------------------------------------------------------------------------------------
+library ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+- Use: ieee.math_real.all
+- Use: work.olo_base_pkg_math.all
+- Use: work.olo_base_pkg_logic.all
+
+## Entity: olo_base_arb_rr
+
+## Architecture: rtl of olo_base_arb_rr
+
+### Signals
+- r: TwoProcess_t
+- r_next: TwoProcess_t
+- RequestMasked: std_logic_vector(In_Req'range)
+- GrantMasked: std_logic_vector(Out_Grant'range)
+- GrantUnmasked: std_logic_vector(Out_Grant'range)
+
+### Component Instantiations
+- Instance 'i_prio_masked' of component 'olo_base_arb_prio'
+- Instance 'i_prio_unmasked' of component 'olo_base_arb_prio'
+
+### Processes
+- Process 'p_comb :' with sensitivity list: r, In_Req, Out_Ready, GrantMasked, GrantUnmasked
+  - Implements conditional logic
+- Process 'p_seq :' (Clocked) (Has Reset) with sensitivity list: Clk
+  - Implements synchronous logic
+- Process 'Unnamed process' with sensitivity list: None (uses wait statements)
+  - Implements conditional logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+
+### Concurrent Statements
+- -- Round Robing Logic
+            RequestMasked <= In_Req and r.Mask
+- -- Generate Grant
+            if unsigned(GrantMasked) = 0 then
+                Grant_v := GrantUnmasked
+- else
+                Grant_v := GrantMasked
+
+## Functional Analysis
+
+- Contains 1 clock domain(s): Clk
+- Uses reset signal(s): Rst
+
+## Code Metrics
+- Line count: 143
+- Process count: 4
+- Signal count: 5
+
+## Summary
+- This module appears to be a general-purpose digital logic implementation.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'olo_base_arb_rr.vhd' plays a specific role in the overall CPU architecture.
+","
 
 library ieee;
     use ieee.std_logic_1164.all;
@@ -174,7 +320,129 @@ begin
     end generate;
 
 end architecture;"
-"This component implements a content addressable memory. Content addressable memories are usually used for fast-lookups in caches, routing tables and other similar scenarios. The concept of mapping a CAM into block and/or distributed RAM described in the [AMD application not XAPP 1151](https://docs.amd.com/v/u/en-US/xapp1151_Param_CAM) is applied. However, _olo_base_cam_ has a very different and much easier to understand user interface than the component described in the application note. The _olo_base_cam_ does allow to write address/content pairs and to find out in which address a queried content is stored. Reads take one clock cycle, writes take two clock cycles and the two things cannot happen at the same time. Below example assumes a _olo_base_cam_ with 4 addresses and 16 bit content. The CAM has logically separated read and write interfaces. They share some resources internally but from a users perspective they are independent. Every read-request issues through _Rd_..._ is followed by one output on both read-response streams: - _OneHot_..._ provides a match response - A vector with one entry per address, indicating if the requested _Rd_Content_ was stored in this address or not - _Addr_..._ provides the binary encoded address where _Rd_Content_ is stored - The first (lowest) matching address is returned - If _Rd_Content_ is not found, _Addr_Found='0'_ is returned. **Note:** By default the content of the CAM is cleared after reset. During the _RamBlockDepth_g_ clock cycles this takes, it is not ready to accept any requests and holds _Rd/Wr_Ready_ low. This behavior can be changed through generics if needed. **Warning:** The user must ensure that an address is NOT occupied when new content is written to this address. Failure to adhere to this rule may lead to undefined behavior.","
+"This component implements a content addressable memory. Content addressable memories are usually used for fast-lookups in caches, routing tables and other similar scenarios. The concept of mapping a CAM into block and/or distributed RAM described in the [AMD application not XAPP 1151](https://docs.amd.com/v/u/en-US/xapp1151_Param_CAM) is applied. However, _olo_base_cam_ has a very different and much easier to understand user interface than the component described in the application note. The _olo_base_cam_ does allow to write address/content pairs and to find out in which address a queried content is stored. Reads take one clock cycle, writes take two clock cycles and the two things cannot happen at the same time. Below example assumes a _olo_base_cam_ with 4 addresses and 16 bit content. The CAM has logically separated read and write interfaces. They share some resources internally but from a users perspective they are independent. Every read-request issues through _Rd_..._ is followed by one output on both read-response streams: - _OneHot_..._ provides a match response - A vector with one entry per address, indicating if the requested _Rd_Content_ was stored in this address or not - _Addr_..._ provides the binary encoded address where _Rd_Content_ is stored - The first (lowest) matching address is returned - If _Rd_Content_ is not found, _Addr_Found='0'_ is returned. **Note:** By default the content of the CAM is cleared after reset. During the _RamBlockDepth_g_ clock cycles this takes, it is not ready to accept any requests and holds _Rd/Wr_Ready_ low. This behavior can be changed through generics if needed. **Warning:** The user must ensure that an address is NOT occupied when new content is written to this address. Failure to adhere to this rule may lead to undefined behavior.
+
+# VHDL Analysis for 'olo_base_cam.vhd'
+
+## File Comments
+- -------------------------------------------------------------------------------------------------
+- Copyright (c) 2024 by Oliver Bründler
+- All rights reserved.
+- Authors: Oliver Bruendler
+- --------------------------------------------------------------------------------------------------
+- -------------------------------------------------------------------------------------------------
+- Description
+- -------------------------------------------------------------------------------------------------
+- This components implements a content addressable memory.
+- Documentation:
+- Plus 75 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Library: work
+- Use: an older version, the documentation might not match the code.
+
+---------------------------------------------------------------------------------------------------
+-- Libraries
+---------------------------------------------------------------------------------------------------
+library ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+- Use: ieee.math_real.all
+- Use: work.olo_base_pkg_math.all
+- Use: work.olo_base_pkg_logic.all
+- Use: WrReady is low)
+                InRdReady_v := '1'
+
+## Entity: olo_base_cam
+
+## Architecture: rtl of olo_base_cam
+
+### Signals
+- r: TwoProcess_r
+- r_next: TwoProcess_r
+- Types ***
+    type RamData_t is array (natural range <>) of std_logic_vector(Addresses_g-1 downto 0);
+
+    -- *** Instantiation Signals ***
+    signal ReadContent_0: std_logic_vector(ContentWidth_g-1 downto 0)
+- RamRead_1: RamData_t(0 to BlocksParallel_c-1)
+- RamWrite_1: RamData_t(0 to BlocksParallel_c-1)
+- WrMem_1: std_logic
+- MatchInt: std_logic_vector(Addresses_g-1 downto 0)
+- MatchValid: std_logic
+- if r.RstClearDone = '0' then
+                -- Deasserting ready signals is done further up where the ready signals are assigned
+                -- Clear CAM
+                v.RstClearWr: = '1'
+- ***
+        r_next <= v;
+    end process;
+
+    -- Output signals
+    Match_Valid <= MatchValid;
+    Match_Match <= MatchInt;
+
+    -----------------------------------------------------------------------------------------------
+    -- Sequential Proccess
+    -----------------------------------------------------------------------------------------------
+    p_seq: process (Clk) is
+    begin
+        if rising_edge(Clk) then
+            r <= r_next
+- ContentExtended_0: std_logic_vector(TotalAddrBits_c-1 downto 0) := (others => '0')
+- RdAddr_0: std_logic_vector(BlockAddrBits_c-1 downto 0)
+- WrAddr_1: std_logic_vector(BlockAddrBits_c-1 downto 0)
+
+### Component Instantiations
+- Instance 'i_ram' of component 'olo_base_ram_sdp'
+
+### Processes
+- Process 'p_cob :' (Has Reset) with sensitivity list: Rd_Valid, Rd_Content, Wr_Valid, Wr_Content, Wr_Addr, Wr_Write, Wr_Clear,
+                     RamRead_1, Rst, r
+  - Implements conditional logic
+  - Contains wait statements: until write is done
+        if r.Write_0 = '1' or r.Clear_0 = '1' or r.ClearAll_0 = '1' then
+            InWrReady_v := '0', for RAM to respond
+            v.ContentExtended_1                            := (others => '0')
+- Process 'p_seq :' (Clocked) (Has Reset) with sensitivity list: Clk
+  - Implements synchronous logic
+- Process 'Unnamed process' (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements conditional logic
+  - Contains wait statements: until write is done
+        if r.Write_0 = '1' or r.Clear_0 = '1' or r.ClearAll_0 = '1' then
+            InWrReady_v := '0', for RAM to respond
+            v.ContentExtended_1                            := (others => '0')
+- Process 'p_seq :' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+
+### Concurrent Statements
+- -- *** Input Ready Handling ***
+        if ReadPriority_g then
+            InRdReady_v := '1'
+- InWrReady_v := not Rd_Valid
+- else
+            InWrReady_v := '1'
+- InRdReady_v := not Wr_Valid
+
+## Functional Analysis
+
+- Contains 1 clock domain(s): Clk
+- Uses reset signal(s): RstClearWr, FirstBitDecLatency_g, Reset, reset, Rst, olo_base_decode_firstbit, First, RstClearDone, Out_FirstBit, RstClearCounter, ClearAfterReset_g
+- Implements memory functionality
+- Implements control logic
+- May be part of a pipeline architecture
+
+## Code Metrics
+- Line count: 390
+- Process count: 4
+- Signal count: 13
+
+## Summary
+- This module implements control logic.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'olo_base_cam.vhd' plays a specific role in the overall CPU architecture.
+","
 
 library ieee;
     use ieee.std_logic_1164.all;
@@ -477,7 +745,104 @@ begin
     end generate;
 
 end architecture;"
-"This component implements a clock crossing for multiple independent single-bit signals. It contains double-stage synchronizers and sets all the attributes required for proper synthesis. Note that this clock crossing does not guarantee that all bits arrive in the same clock cycle at the destination clock domain, therefore it can only be used for independent single-bit signals. Do not use it to transfer multi-bit signals (e.g. numbers) where it is important that all the bits are updated in the same clock cycle. This block follows the general [clock-crossing principles](clock_crossing_principles.md). Read through them for more information.","
+"This component implements a clock crossing for multiple independent single-bit signals. It contains double-stage synchronizers and sets all the attributes required for proper synthesis. Note that this clock crossing does not guarantee that all bits arrive in the same clock cycle at the destination clock domain, therefore it can only be used for independent single-bit signals. Do not use it to transfer multi-bit signals (e.g. numbers) where it is important that all the bits are updated in the same clock cycle. This block follows the general [clock-crossing principles](clock_crossing_principles.md). Read through them for more information.
+
+# VHDL Analysis for 'olo_base_cc_bits.vhd'
+
+## File Comments
+- -------------------------------------------------------------------------------------------------
+- Copyright (c) 2018 by Paul Scherrer Institute, Switzerland
+- Copyright (c) 2024-2025 by Oliver Bründler
+- All rights reserved.
+- Authors: Oliver Bruendler
+- -------------------------------------------------------------------------------------------------
+- -------------------------------------------------------------------------------------------------
+- Description
+- -------------------------------------------------------------------------------------------------
+- This is a very basic clock crossing that allows passing multple independent
+- Plus 35 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Library: work
+- Use: an older version, the documentation might not match the code.
+
+---------------------------------------------------------------------------------------------------
+-- Libraries
+---------------------------------------------------------------------------------------------------
+library ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+- Use: work.olo_base_pkg_attribute.all
+
+## Entity: olo_base_cc_bits
+
+## Architecture: struct of olo_base_cc_bits
+
+### Signals
+- RegIn: std_logic_vector(Width_g - 1 downto 0) := (others => '0')
+- Reg0: std_logic_vector(Width_g - 1 downto 0) := (others => '0')
+- RegN: SyncStages_t                           := (others => (others => '0'))
+- is ShregExtract_SuppressExtraction_c;
+    attribute shreg_extract of RegN: signal is ShregExtract_SuppressExtraction_c
+- is ShregExtract_SuppressExtraction_c;
+
+    attribute syn_srlstyle of Reg0: signal is SynSrlstyle_FlipFlops_c
+- is SynSrlstyle_FlipFlops_c;
+    attribute syn_srlstyle of RegIn: signal is SynSrlstyle_FlipFlops_c
+- is DontMerge_SuppressChanges_c;
+    attribute dont_merge of RegN: signal is DontMerge_SuppressChanges_c
+- is DontMerge_SuppressChanges_c;
+
+    attribute preserve of Reg0: signal is Preserve_SuppressChanges_c
+- is Preserve_SuppressChanges_c;
+    attribute preserve of RegIn: signal is Preserve_SuppressChanges_c
+- is SynPreserve_SuppressChanges_c;
+    attribute syn_preserve of RegN: signal is SynPreserve_SuppressChanges_c
+- is SynPreserve_SuppressChanges_c;
+
+    attribute syn_keep of Reg0: signal is SynKeep_SuppressChanges_c
+- is SynKeep_SuppressChanges_c;
+    attribute syn_keep of RegIn: signal is SynKeep_SuppressChanges_c
+- is AsyncReg_TreatAsync_c;
+    attribute async_reg of RegN: signal is AsyncReg_TreatAsync_c
+- is AsyncReg_TreatAsync_c;
+
+    -- Input clock (required for automatic constraining in vivado)
+    signal In_Clk_Sig: std_logic
+- is DontTouch_SuppressChanges_c;
+    attribute keep of In_Clk_Sig: signal is Keep_SuppressChanges_c
+
+### Processes
+- Process 'p_inff :' (Clocked) (Has Reset) with sensitivity list: In_Clk
+  - Implements synchronous logic
+- Process 'p_outff :' (Clocked) (Has Reset) with sensitivity list: Out_Clk
+  - Implements synchronous logic with reset
+- Process 'p_inff :' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic with reset
+
+### Concurrent Statements
+- if In_Rst = '1' then
+                RegIn <= (others => '0')
+
+## Functional Analysis
+
+- Contains 3 clock domain(s): clock, Out_Clk, In_Clk
+- Uses reset signal(s): Reset, Out_Rst, In_Rst, First
+- May be part of a pipeline architecture
+
+## Code Metrics
+- Line count: 150
+- Process count: 4
+- Signal count: 15
+
+## Summary
+- This module implements register or flip-flop functionality.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'olo_base_cc_bits.vhd' plays a specific role in the overall CPU architecture.
+","
 
 library ieee;
     use ieee.std_logic_1164.all;
@@ -579,7 +944,82 @@ begin
 
 end architecture;
 "
-"This component implements a clock crossing with AXI-S handshaking for transferring data from one clock domain to another one that runs at a potentially completely asynchronous clock It can for example be used to transfer data from a 100 MHz clock domain to a 55.32 MHz clock domain. This component implements full AXI-S handshaking but is not made for high performance. It can transfer one data-word every _(2 + SyncStages_g) x InputClockPeriods + (2 + SyncStages_g) x OutputClockPeriods_ . Whenever distributed RAM can be used (i.e. LUTs can be used as small RAMs), [olo_base_fifo_async](./olo_base_fifo_async.md) is to be preferred over this entity. For small FIFO depths, it is more resource efficient. Hence _olo_base_cc_handshake_ shall only be used in cases where distributed RAM is not an option (e.g. because it is in not supported by the target technology or because the design is short the related LUT resources). This block follows the general [clock-crossing principles](clock_crossing_principles.md). Read through them for more information.","
+"This component implements a clock crossing with AXI-S handshaking for transferring data from one clock domain to another one that runs at a potentially completely asynchronous clock It can for example be used to transfer data from a 100 MHz clock domain to a 55.32 MHz clock domain. This component implements full AXI-S handshaking but is not made for high performance. It can transfer one data-word every _(2 + SyncStages_g) x InputClockPeriods + (2 + SyncStages_g) x OutputClockPeriods_ . Whenever distributed RAM can be used (i.e. LUTs can be used as small RAMs), [olo_base_fifo_async](./olo_base_fifo_async.md) is to be preferred over this entity. For small FIFO depths, it is more resource efficient. Hence _olo_base_cc_handshake_ shall only be used in cases where distributed RAM is not an option (e.g. because it is in not supported by the target technology or because the design is short the related LUT resources). This block follows the general [clock-crossing principles](clock_crossing_principles.md). Read through them for more information.
+
+# VHDL Analysis for 'olo_base_cc_handshake.vhd'
+
+## File Comments
+- -------------------------------------------------------------------------------------------------
+- Copyright (c) 2024 by Oliver Bründler
+- All rights reserved.
+- Authors: Oliver Bruendler
+- -------------------------------------------------------------------------------------------------
+- -------------------------------------------------------------------------------------------------
+- Description
+- -------------------------------------------------------------------------------------------------
+- This is a very basic clock crossing that allows passing of data with the
+- commonly used Valid/Ready handshake.
+- Plus 28 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Use: an older version, the documentation might not match the code.
+
+---------------------------------------------------------------------------------------------------
+-- Libraries
+---------------------------------------------------------------------------------------------------
+library ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+- Use: may override the clause above
+            if In_Valid = '1' and In_ReadyI = '1' then
+                InLatched <= '1'
+
+## Entity: olo_base_cc_handshake
+
+## Architecture: rtl of olo_base_cc_handshake
+
+### Signals
+- RstInI: std_logic
+- In_ReadyI: std_logic
+- InLatched: std_logic := '0'
+- InTransaction: std_logic
+- InAck: std_logic
+- RstOutI: std_logic
+- OutTransaction: std_logic
+- OutLatched: std_logic := '0'
+- OutAck: std_logic
+- Out_ValidI: std_logic
+
+### Component Instantiations
+- Instance 'i_scc' of component 'olo_base_cc_simple'
+- Instance 'i_bcc' of component 'olo_base_cc_pulse'
+
+### Processes
+- Process 'p_in :' (Clocked) (Has Reset) with sensitivity list: In_Clk
+  - Implements synchronous logic with reset
+- Process 'p_out :' (Clocked) (Has Reset) with sensitivity list: Out_Clk
+  - Implements synchronous logic with reset
+- Process 'p_in :' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic with reset
+- Process 'p_out :' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic with reset
+
+## Functional Analysis
+
+- Contains 3 clock domain(s): clock, Out_Clk, In_Clk
+- Uses reset signal(s): ReadyRstState_g, Reset, reset, In_RstOut, Out_RstIn, In_RstIn, RstInI, RstOutI, Out_RstOut
+
+## Code Metrics
+- Line count: 163
+- Process count: 4
+- Signal count: 10
+
+## Summary
+- This module appears to be a general-purpose digital logic implementation.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'olo_base_cc_handshake.vhd' plays a specific role in the overall CPU architecture.
+","
 
 library ieee;
     use ieee.std_logic_1164.all;
@@ -702,7 +1142,79 @@ begin
     Out_Valid  <= Out_ValidI;
 
 end architecture;"
-"This component implements a clock crossing with AXI-S handshaking for transferring data from one clock domain to another one that runs at an integer multiple of the frequency of the input clock frequency. It can for example be used to transfer data from a 50 MHz clock domain to a 100 MHz clock domain (both generated by the same PLL). Note that the two clocks must be phase aligned. Note that the clock crossing **does not work if the two clocks have the same frequency**. This block follows the general [clock-crossing principles](clock_crossing_principles.md). Read through them for more information.","
+"This component implements a clock crossing with AXI-S handshaking for transferring data from one clock domain to another one that runs at an integer multiple of the frequency of the input clock frequency. It can for example be used to transfer data from a 50 MHz clock domain to a 100 MHz clock domain (both generated by the same PLL). Note that the two clocks must be phase aligned. Note that the clock crossing **does not work if the two clocks have the same frequency**. This block follows the general [clock-crossing principles](clock_crossing_principles.md). Read through them for more information.
+
+# VHDL Analysis for 'olo_base_cc_n2xn.vhd'
+
+## File Comments
+- -------------------------------------------------------------------------------------------------
+- Copyright (c) 2018 by Paul Scherrer Institute, Switzerland
+- Copyright (c) 2024 by Oliver Bründler
+- All rights reserved.
+- Authors: Oliver Bruendler
+- -------------------------------------------------------------------------------------------------
+- -------------------------------------------------------------------------------------------------
+- Description
+- -------------------------------------------------------------------------------------------------
+- This entity implements a clock crossing between two synchronous clocks where
+- Plus 19 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Use: an older version, the documentation might not match the code.
+
+---------------------------------------------------------------------------------------------------
+-- Libraries
+---------------------------------------------------------------------------------------------------
+library ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+- Use: ieee.math_real.all
+
+## Entity: olo_base_cc_n2xn
+
+## Architecture: rtl of olo_base_cc_n2xn
+
+### Signals
+- InRstInt: std_logic
+- InDataReg: std_logic_vector(Width_g - 1 downto 0)
+- InToggle: std_logic
+- OutRstInt: std_logic
+- OutDataReg: std_logic_vector(Width_g - 1 downto 0)
+- OutDataVld: std_logic
+- OutToggle: std_logic
+
+### Component Instantiations
+- Instance 'i_rst_cc' of component 'olo_base_cc_reset'
+
+### Processes
+- Process 'p_input :' (Clocked) (Has Reset) with sensitivity list: In_Clk
+  - Implements synchronous logic with reset
+- Process 'p_output :' (Clocked) (Has Reset) with sensitivity list: Out_Clk
+  - Implements synchronous logic with reset
+- Process 'p_input :' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic with reset
+- Process 'p_output :' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic with reset
+
+### Concurrent Statements
+- InToggle  <= not InToggle
+
+## Functional Analysis
+
+- Contains 5 clock domain(s): Out_Clk, B_Clk, In_Clk, clock, A_Clk
+- Uses reset signal(s): B_RstIn, i_rst_cc, olo_base_cc_reset, A_RstIn, B_RstOut, Reset, In_RstOut, Out_RstIn, In_RstIn, A_RstOut, Out_RstOut, InRstInt, OutRstInt
+
+## Code Metrics
+- Line count: 125
+- Process count: 4
+- Signal count: 7
+
+## Summary
+- This module appears to be a general-purpose digital logic implementation.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'olo_base_cc_n2xn.vhd' plays a specific role in the overall CPU architecture.
+","
 
 library ieee;
     use ieee.std_logic_1164.all;
@@ -795,7 +1307,82 @@ begin
     Out_RstOut <= OutRstInt;
 
 end architecture;"
-"This component implements a clock crossing for transferring single pulses from one clock domain to another (completely asynchronous clocks). The entity shall only be used for single-cycle pulses and the pulse frequency must be lower than twice the frequency of the slower clock for it to work correctly. The entity does only guarantee that all pulses arrive at the destination clock domain. It does not guarantee that pulses that occur in the same clock cycle on the source clock domain, occur on the target clock domain in the same clock cycle. As a result it should only be used to do clock-crossings for individual pulses. This block follows the general [clock-crossing principles](clock_crossing_principles.md). Read through them for more information.","
+"This component implements a clock crossing for transferring single pulses from one clock domain to another (completely asynchronous clocks). The entity shall only be used for single-cycle pulses and the pulse frequency must be lower than twice the frequency of the slower clock for it to work correctly. The entity does only guarantee that all pulses arrive at the destination clock domain. It does not guarantee that pulses that occur in the same clock cycle on the source clock domain, occur on the target clock domain in the same clock cycle. As a result it should only be used to do clock-crossings for individual pulses. This block follows the general [clock-crossing principles](clock_crossing_principles.md). Read through them for more information.
+
+# VHDL Analysis for 'olo_base_cc_pulse.vhd'
+
+## File Comments
+- -------------------------------------------------------------------------------------------------
+- Copyright (c) 2018 by Paul Scherrer Institute, Switzerland
+- Copyright (c) 2024 by Oliver Bründler
+- All rights reserved.
+- Authors: Oliver Bruendler
+- -------------------------------------------------------------------------------------------------
+- -------------------------------------------------------------------------------------------------
+- Description
+- -------------------------------------------------------------------------------------------------
+- This is a very basic clock crossing that allows passing pulses from one clock
+- Plus 27 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Use: an older version, the documentation might not match the code.
+
+---------------------------------------------------------------------------------------------------
+-- Libraries
+---------------------------------------------------------------------------------------------------
+library ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+- Use: register is in olo_base_cc_bits
+    ToggleIn <= ToggleLast xor In_Pulse
+
+## Entity: olo_base_cc_pulse
+
+## Architecture: rtl of olo_base_cc_pulse
+
+### Signals
+- RstInI: std_logic
+- RstOutI: std_logic
+- ToggleIn: std_logic_vector(NumPulses_g - 1 downto 0)
+- ToggleLast: std_logic_vector(NumPulses_g - 1 downto 0)
+- ToggleOut: std_logic_vector(NumPulses_g - 1 downto 0)
+- ToggleOutLast: std_logic_vector(NumPulses_g - 1 downto 0)
+
+### Component Instantiations
+- Instance 'i_rst' of component 'olo_base_cc_reset'
+- Instance 'i_sync' of component 'olo_base_cc_bits'
+
+### Processes
+- Process 'p_reg :' (Clocked) (Has Reset) with sensitivity list: In_Clk
+  - Implements synchronous logic
+- Process 'p_pulseout :' (Clocked) (Has Reset) with sensitivity list: Out_Clk
+  - Implements synchronous logic with reset
+- Process 'p_reg :' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+- Process 'p_pulseout :' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic with reset
+
+### Concurrent Statements
+- if RstInI = '1' then
+                ToggleLast <= (others => '0')
+
+## Functional Analysis
+
+- Contains 5 clock domain(s): Out_Clk, B_Clk, In_Clk, clock, A_Clk
+- Uses reset signal(s): B_RstIn, olo_base_cc_reset, A_RstIn, Reset, In_RstOut, Out_RstIn, In_RstIn, RstInI, RstOutI, A_RstOut, i_rst, In_Rst, Out_RstOut, Resets, Out_Rst, B_RstOut
+- May be part of a pipeline architecture
+
+## Code Metrics
+- Line count: 131
+- Process count: 4
+- Signal count: 6
+
+## Summary
+- This module implements register or flip-flop functionality.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'olo_base_cc_pulse.vhd' plays a specific role in the overall CPU architecture.
+","
 
 library ieee;
     use ieee.std_logic_1164.all;
@@ -885,7 +1472,117 @@ begin
     end process;
 
 end architecture;"
-"This component synchronizes reset inputs from two clock domains in both directions. Whenever a reset is received on one clock domain, it produces reset outputs on both clock domains and ensures that both reset outputs are asserted at the same time for at least one clock cycle before they are released again. This type of reset synchronization is required in many clock crossings. Usually both sides of the clock crossing must be reset at the same time to avoid unwanted behavior in corner conditions around resets. When using the block, you should connect any reset request signals to _A/B_RstIn_ and reset your logic with the outputs _A/B_RstOut_. This block follows the general [clock-crossing principles](clock_crossing_principles.md). Read through them for more information.","
+"This component synchronizes reset inputs from two clock domains in both directions. Whenever a reset is received on one clock domain, it produces reset outputs on both clock domains and ensures that both reset outputs are asserted at the same time for at least one clock cycle before they are released again. This type of reset synchronization is required in many clock crossings. Usually both sides of the clock crossing must be reset at the same time to avoid unwanted behavior in corner conditions around resets. When using the block, you should connect any reset request signals to _A/B_RstIn_ and reset your logic with the outputs _A/B_RstOut_. This block follows the general [clock-crossing principles](clock_crossing_principles.md). Read through them for more information.
+
+# VHDL Analysis for 'olo_base_cc_reset.vhd'
+
+## File Comments
+- -------------------------------------------------------------------------------------------------
+- Copyright (c) 2018 by Paul Scherrer Institute, Switzerland
+- Copyright (c) 2024-2025 by Oliver Bründler
+- All rights reserved.
+- Authors: Oliver Bruendler
+- -------------------------------------------------------------------------------------------------
+- -------------------------------------------------------------------------------------------------
+- Description
+- -------------------------------------------------------------------------------------------------
+- This is a very basic clock crossing that allows to clock-cross resets. It
+- Plus 32 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Library: work
+- Use: an older version, the documentation might not match the code.
+
+---------------------------------------------------------------------------------------------------
+-- Libraries
+---------------------------------------------------------------------------------------------------
+library ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+- Use: work.olo_base_pkg_attribute.all
+
+## Entity: olo_base_cc_reset
+
+## Architecture: struct of olo_base_cc_reset
+
+### Signals
+- RstALatch: std_logic                    := '1'
+- RstRqstB2A: std_logic_vector(2 downto 0) := (others => '0')
+- RstAckB2A: std_logic
+- RstBLatch: std_logic                    := '1'
+- RstRqstA2B: std_logic_vector(2 downto 0) := (others => '0')
+- RstAckA2B: std_logic
+- is ShregExtract_SuppressExtraction_c;
+    attribute shreg_extract of RstAckB2A: signal is ShregExtract_SuppressExtraction_c
+- is ShregExtract_SuppressExtraction_c;
+    attribute shreg_extract of RstAckA2B: signal is ShregExtract_SuppressExtraction_c
+- is SynSrlstyle_FlipFlops_c;
+    attribute syn_srlstyle of RstAckB2A: signal is SynSrlstyle_FlipFlops_c
+- is SynSrlstyle_FlipFlops_c;
+    attribute syn_srlstyle of RstAckA2B: signal is SynSrlstyle_FlipFlops_c
+- is DontMerge_SuppressChanges_c;
+    attribute dont_merge of RstAckB2A: signal is DontMerge_SuppressChanges_c
+- is DontMerge_SuppressChanges_c;
+    attribute dont_merge of RstAckA2B: signal is DontMerge_SuppressChanges_c
+- is Preserve_SuppressChanges_c;
+    attribute preserve of RstAckB2A: signal is Preserve_SuppressChanges_c
+- is Preserve_SuppressChanges_c;
+    attribute preserve of RstAckA2B: signal is Preserve_SuppressChanges_c
+- is SynKeep_SuppressChanges_c;
+    attribute syn_keep of RstAckB2A: signal is SynKeep_SuppressChanges_c
+- is SynKeep_SuppressChanges_c;
+    attribute syn_keep of RstAckA2B: signal is SynKeep_SuppressChanges_c
+- is SynPreserve_SuppressChanges_c;
+    attribute syn_preserve of RstAckB2A: signal is SynPreserve_SuppressChanges_c
+- is SynPreserve_SuppressChanges_c;
+    attribute syn_preserve of RstAckA2B: signal is SynPreserve_SuppressChanges_c
+- is AsyncReg_TreatAsync_c;
+    attribute async_reg of RstAckB2A: signal is AsyncReg_TreatAsync_c
+- is AsyncReg_TreatAsync_c;
+    attribute async_reg of RstAckA2B: signal is AsyncReg_TreatAsync_c
+
+### Component Instantiations
+- Instance 'i_ackb2a' of component 'olo_base_cc_bits'
+- Instance 'i_acka2b' of component 'olo_base_cc_bits'
+
+### Processes
+- Process 'p_a_rst_sync :' (Clocked) (Has Reset) with sensitivity list: A_Clk, RstBLatch
+  - Implements synchronous logic
+- Process 'p_a_rst :' (Clocked) (Has Reset) with sensitivity list: A_Clk
+  - Implements synchronous logic with reset
+- Process 'p_b_rst_sync :' (Clocked) (Has Reset) with sensitivity list: B_Clk, RstALatch
+  - Implements synchronous logic
+- Process 'p_b_rst :' (Clocked) (Has Reset) with sensitivity list: B_Clk
+  - Implements synchronous logic with reset
+- Process 'p_a_rst_sync :' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+- Process 'p_a_rst :' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic with reset
+- Process 'p_b_rst_sync :' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+- Process 'p_b_rst :' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic with reset
+
+### Concurrent Statements
+- elsif rising_edge(A_Clk) then
+            RstRqstB2A <= RstRqstB2A(RstRqstB2A'left - 1 downto 0) & '0'
+
+## Functional Analysis
+
+- Contains 5 clock domain(s): Out_Clk, B_Clk, In_Clk, clock, A_Clk
+- Uses reset signal(s): B_RstIn, A_RstIn, RstBLatch, In_Rst, B_RstOut, resets, RstAckB2A, RstRqstB2A, A_RstOut, p_b_rst, p_a_rst, RstALatch, p_a_rst_sync, reset, olo_base_cc_reset, p_b_rst_sync, RstAckA2B, Out_Rst, RstRqstA2B
+
+## Code Metrics
+- Line count: 190
+- Process count: 8
+- Signal count: 20
+
+## Summary
+- This module implements register or flip-flop functionality.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'olo_base_cc_reset.vhd' plays a specific role in the overall CPU architecture.
+","
 
 library ieee;
     use ieee.std_logic_1164.all;
@@ -1028,7 +1725,77 @@ begin
         );
 
 end architecture;"
-"This component implements a clock crossing for transferring single values from one clock domain to another (completely asynchronous clocks). In both clock domains the valid samples are marked with a Valid signal according to the AXI-S specification but back-pressure (Ready) is not handled. **For the entity to work correctly, the data-rate must be significantly lower ( (_3+SyncStages_g_ x lower) than the slower clock frequency.** This block follows the general [clock-crossing principles](clock_crossing_principles.md). Read through them for more information.","
+"This component implements a clock crossing for transferring single values from one clock domain to another (completely asynchronous clocks). In both clock domains the valid samples are marked with a Valid signal according to the AXI-S specification but back-pressure (Ready) is not handled. **For the entity to work correctly, the data-rate must be significantly lower ( (_3+SyncStages_g_ x lower) than the slower clock frequency.** This block follows the general [clock-crossing principles](clock_crossing_principles.md). Read through them for more information.
+
+# VHDL Analysis for 'olo_base_cc_simple.vhd'
+
+## File Comments
+- -------------------------------------------------------------------------------------------------
+- Copyright (c) 2018 by Paul Scherrer Institute, Switzerland
+- Copyright (c) 2024-2025 by Oliver Bründler
+- All rights reserved.
+- Authors: Oliver Bruendler
+- -------------------------------------------------------------------------------------------------
+- -------------------------------------------------------------------------------------------------
+- Description
+- -------------------------------------------------------------------------------------------------
+- This is a very basic clock crossing that allows passing single samples of data
+- Plus 22 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Library: work
+- Use: an older version, the documentation might not match the code.
+
+---------------------------------------------------------------------------------------------------
+-- Libraries
+---------------------------------------------------------------------------------------------------
+library ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+- Use: work.olo_base_pkg_attribute.all
+
+## Entity: olo_base_cc_simple
+
+## Architecture: struct of olo_base_cc_simple
+
+### Signals
+- RstInI: std_logic
+- DataLatchIn: std_logic_vector(Width_g - 1 downto 0)
+- RstOutI: std_logic
+- VldOutI: std_logic
+- Out_Data_Sig: std_logic_vector(Width_g - 1 downto 0)
+- is DontTouch_SuppressChanges_c;
+    attribute keep of Out_Data_Sig: signal is Keep_SuppressChanges_c
+
+### Component Instantiations
+- Instance 'i_pulse_cc' of component 'olo_base_cc_pulse'
+
+### Processes
+- Process 'p_data_a :' (Clocked) with sensitivity list: In_Clk
+  - Implements synchronous logic
+- Process 'p_data_b :' (Clocked) (Has Reset) with sensitivity list: Out_Clk
+  - Implements synchronous logic with reset
+- Process 'p_data_a :' (Clocked) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+- Process 'p_data_b :' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic with reset
+
+## Functional Analysis
+
+- Contains 3 clock domain(s): clock, Out_Clk, In_Clk
+- Uses reset signal(s): Reset, In_RstOut, Out_RstIn, In_RstIn, RstInI, RstOutI, Out_RstOut
+
+## Code Metrics
+- Line count: 121
+- Process count: 4
+- Signal count: 6
+
+## Summary
+- This module appears to be a general-purpose digital logic implementation.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'olo_base_cc_simple.vhd' plays a specific role in the overall CPU architecture.
+","
 
 library ieee;
     use ieee.std_logic_1164.all;
@@ -1114,7 +1881,79 @@ begin
     Out_Data <= Out_Data_Sig;
 
 end architecture;"
-"This component implements a clock crossing for slowly changing status information that does not have exact sample rates. It can for example be used to  transfer a buffer fill level from one clock domain to another with minimal effort and without knowing anything about the frequencies of the two clocks (e.g. without knowing which one runs faster). The entity ensures that data from the source clock domain is correctly transferred to the destination clock domain. The value at the destination clock domain is always correct in terms of ""the exact same value was present on the input clock domain in one clock-cycle"". The exact timing of the sampling points at which the data is transferred is generated by the entity itself, so it is unknown to the user. As a result, the entity does not guarantee to show transient states of the data signal in the source clock domain to the destination clock domain in cases of fast changing signals. For the entity to work correctly, the data-rate must be significantly lower (_6 + 2 * SyncStages_g_ x lower) than the slower clock frequency. Of course the signal can change more quickly but the clock crossing will skip some values in this case. This block follows the general [clock-crossing principles](clock_crossing_principles.md). Read through them for more information.","
+"This component implements a clock crossing for slowly changing status information that does not have exact sample rates. It can for example be used to  transfer a buffer fill level from one clock domain to another with minimal effort and without knowing anything about the frequencies of the two clocks (e.g. without knowing which one runs faster). The entity ensures that data from the source clock domain is correctly transferred to the destination clock domain. The value at the destination clock domain is always correct in terms of ""the exact same value was present on the input clock domain in one clock-cycle"". The exact timing of the sampling points at which the data is transferred is generated by the entity itself, so it is unknown to the user. As a result, the entity does not guarantee to show transient states of the data signal in the source clock domain to the destination clock domain in cases of fast changing signals. For the entity to work correctly, the data-rate must be significantly lower (_6 + 2 * SyncStages_g_ x lower) than the slower clock frequency. Of course the signal can change more quickly but the clock crossing will skip some values in this case. This block follows the general [clock-crossing principles](clock_crossing_principles.md). Read through them for more information.
+
+# VHDL Analysis for 'olo_base_cc_status.vhd'
+
+## File Comments
+- -------------------------------------------------------------------------------------------------
+- Copyright (c) 2018 by Paul Scherrer Institute, Switzerland
+- Copyright (c) 2024 by Oliver Bründler
+- All rights reserved.
+- Authors: Oliver Bruendler
+- -------------------------------------------------------------------------------------------------
+- -------------------------------------------------------------------------------------------------
+- Description
+- -------------------------------------------------------------------------------------------------
+- This is a very basic clock crossing that allows passing of static-data
+- Plus 26 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Use: cause of this entity is to pass status information or configuration
+-- register values between clock domains.
+--
+-- Documentation:
+-- https://github.com/open-logic/open-logic/blob/main/doc/base/olo_base_cc_status.md
+--
+-- Note: The link points to the documentation of the latest release. If you
+--       use an older version, the documentation might not match the code.
+
+---------------------------------------------------------------------------------------------------
+-- Libraries
+---------------------------------------------------------------------------------------------------
+library ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+
+## Entity: olo_base_cc_status
+
+## Architecture: rtl of olo_base_cc_status
+
+### Signals
+- RstInI: std_logic
+- Started: std_logic := '0'
+- RstOutI_Sync: std_logic_vector(1 downto 0)
+- VldIn: std_logic
+- VldFb: std_logic
+- RstOutI: std_logic
+- VldOut: std_logic
+
+### Component Instantiations
+- Instance 'i_scc' of component 'olo_base_cc_simple'
+- Instance 'i_bcc' of component 'olo_base_cc_pulse'
+
+### Processes
+- Process 'p_vldgen :' (Clocked) (Has Reset) with sensitivity list: In_Clk
+  - Implements synchronous logic with reset
+- Process 'p_vldgen :' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic with reset
+
+## Functional Analysis
+
+- Contains 3 clock domain(s): clock, Out_Clk, In_Clk
+- Uses reset signal(s): first, Reset, In_RstOut, RstOutI_Sync, Out_RstIn, In_RstIn, RstInI, RstOutI, Out_RstOut
+
+## Code Metrics
+- Line count: 129
+- Process count: 2
+- Signal count: 7
+
+## Summary
+- This module implements register or flip-flop functionality.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'olo_base_cc_status.vhd' plays a specific role in the overall CPU architecture.
+","
 
 library ieee;
     use ieee.std_logic_1164.all;
@@ -1204,7 +2043,80 @@ begin
         );
 
 end architecture;"
-"This component implements a clock crossing with AXI-S handshaking for transferring data from one clock domain to another one that runs at an integer fraction of the frequency of the input clock frequency. It can for example be used to transfer data from a 100 MHz clock domain to a 50 MHz clock domain (both generated by the same PLL). Note that the two clocks must be phase aligned. Note that the clock crossing **does not work if the two clocks have the same frequency**. This block follows the general [clock-crossing principles](clock_crossing_principles.md). Read through them for more information.","
+"This component implements a clock crossing with AXI-S handshaking for transferring data from one clock domain to another one that runs at an integer fraction of the frequency of the input clock frequency. It can for example be used to transfer data from a 100 MHz clock domain to a 50 MHz clock domain (both generated by the same PLL). Note that the two clocks must be phase aligned. Note that the clock crossing **does not work if the two clocks have the same frequency**. This block follows the general [clock-crossing principles](clock_crossing_principles.md). Read through them for more information.
+
+# VHDL Analysis for 'olo_base_cc_xn2n.vhd'
+
+## File Comments
+- -------------------------------------------------------------------------------------------------
+- Copyright (c) 2018 by Paul Scherrer Institute, Switzerland
+- Copyright (c) 2024 by Oliver Bründler
+- All rights reserved.
+- Authors: Oliver Bruendler
+- -------------------------------------------------------------------------------------------------
+- -------------------------------------------------------------------------------------------------
+- Description
+- -------------------------------------------------------------------------------------------------
+- This entity implements a clock crossing between two synchronous clocks where
+- Plus 18 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Use: an older version, the documentation might not match the code.
+
+---------------------------------------------------------------------------------------------------
+-- Libraries
+---------------------------------------------------------------------------------------------------
+library ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+- Use: ieee.math_real.all
+
+## Entity: olo_base_cc_xn2n
+
+## Architecture: rtl of olo_base_cc_xn2n
+
+### Signals
+- InCnt: unsigned(1 downto 0)
+- InRstInt: std_logic
+- InDataReg: std_logic_vector(Width_g - 1 downto 0)
+- InDataRegLast: std_logic_vector(Width_g - 1 downto 0)
+- OutCnt: unsigned(1 downto 0)
+- OutRstInt: std_logic
+- OutIn_Valid: std_logic
+
+### Component Instantiations
+- Instance 'i_rst_cc' of component 'olo_base_cc_reset'
+
+### Processes
+- Process 'p_input :' (Clocked) (Has Reset) with sensitivity list: In_Clk
+  - Implements synchronous logic with reset
+- Process 'p_output :' (Clocked) (Has Reset) with sensitivity list: Out_Clk
+  - Implements synchronous logic
+- Process 'p_input :' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic with reset
+- Process 'p_output :' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+
+### Concurrent Statements
+- InDataReg     <= In_Data
+- InDataRegLast <= InDataReg
+
+## Functional Analysis
+
+- Contains 5 clock domain(s): Out_Clk, B_Clk, In_Clk, clock, A_Clk
+- Uses reset signal(s): B_RstIn, i_rst_cc, olo_base_cc_reset, A_RstIn, B_RstOut, Reset, In_RstOut, Out_RstIn, In_RstIn, A_RstOut, Out_RstOut, InRstInt, OutRstInt
+
+## Code Metrics
+- Line count: 125
+- Process count: 4
+- Signal count: 7
+
+## Summary
+- This module appears to be a general-purpose digital logic implementation.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'olo_base_cc_xn2n.vhd' plays a specific role in the overall CPU architecture.
+","
 
 library ieee;
     use ieee.std_logic_1164.all;
@@ -1298,7 +2210,75 @@ begin
     Out_RstOut <= OutRstInt;
 
 end architecture;"
-"This component is a CRC checksum generator. It can be used to generate CRC checksums to send together with data (TX side) or to calculate the CRC checksum of received data and compare it to the CRC received (RX side). _olo_base_crc_ can take one input data word per clock cycle. One CRC is produced per packet - the _Out_Valid_ signal is presented to the output after _In_Last_ was received. Although _Out_Valid_ is asserted only upon the _In_Last_ being received, the output _Out_Crc_ is updated exactly one clock cycle after an input word being received. This allows for special applications where the CRC has to be checked after every data-word. The component is highly configurable in order to allow calculating CRC checksums for all known standard protocols without any external logic. Regarding the notation of parametrization, the website [crccalc.com](https://crccalc.com) is taken as reference. On this website many commonly used CRCs are listed.","
+"This component is a CRC checksum generator. It can be used to generate CRC checksums to send together with data (TX side) or to calculate the CRC checksum of received data and compare it to the CRC received (RX side). _olo_base_crc_ can take one input data word per clock cycle. One CRC is produced per packet - the _Out_Valid_ signal is presented to the output after _In_Last_ was received. Although _Out_Valid_ is asserted only upon the _In_Last_ being received, the output _Out_Crc_ is updated exactly one clock cycle after an input word being received. This allows for special applications where the CRC has to be checked after every data-word. The component is highly configurable in order to allow calculating CRC checksums for all known standard protocols without any external logic. Regarding the notation of parametrization, the website [crccalc.com](https://crccalc.com) is taken as reference. On this website many commonly used CRCs are listed.
+
+# VHDL Analysis for 'olo_base_crc.vhd'
+
+## File Comments
+- -------------------------------------------------------------------------------------------------
+- Copyright (c) 2025 by Oliver Bründler
+- All rights reserved.
+- Authors: Oliver Bründler
+- -------------------------------------------------------------------------------------------------
+- -------------------------------------------------------------------------------------------------
+- Description:
+- -------------------------------------------------------------------------------------------------
+- A CRC generator based on a linear-feedback shifter register. Can be used to generate CRCs to add
+- on TX side or to calculate CRCs to compare to received CRC on RX side.
+- Plus 33 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Library: work
+- Use: an older version, the documentation might not match the code.
+
+---------------------------------------------------------------------------------------------------
+-- Libraries
+---------------------------------------------------------------------------------------------------
+library ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.std_logic_misc.all
+- Use: ieee.numeric_std.all
+- Use: work.olo_base_pkg_logic.all
+- Use: work.olo_base_pkg_math.all
+
+## Entity: olo_base_crc
+
+## Architecture: rtl of olo_base_crc
+
+### Signals
+- LfsrReg: std_logic_vector(CrcWidth_g-1 downto 0)
+- Out_Valid_I: std_logic
+- In_Ready_I: std_logic
+
+### Processes
+- Process 'p_lfsr :' (Clocked) (Has Reset) with sensitivity list: Clk
+  - Implements synchronous logic with reset
+- Process 'p_lfsr :' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic with reset
+
+### Concurrent Statements
+- if BitOrder_g = ""MSB_FIRST"" then
+                if ByteOrder_g = ""LSB_FIRST"" then
+                    Input_v := invertByteOrder(Input_v)
+
+## Functional Analysis
+
+- Contains 1 clock domain(s): Clk
+- Uses reset signal(s): In_First, MSB_FIRST, first, Reset, Rst, First, LSB_FIRST
+- Implements arithmetic/computational functionality
+- Implements control logic
+
+## Code Metrics
+- Line count: 171
+- Process count: 2
+- Signal count: 3
+
+## Summary
+- This module implements control logic.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'olo_base_crc.vhd' plays a specific role in the overall CPU architecture.
+","
 
 library ieee;
     use ieee.std_logic_1164.all;
@@ -1426,7 +2406,93 @@ begin
     In_Ready  <= In_Ready_I;
 
 end architecture;"
-"This entity implements a first-bit decoder. It does return the index of the lowest bit set in a vector. First bit decoding can be done in only a few lines of code if all the decoding is done in one clock cycles. However, for doing first-bit decoding on very wide vectors this leads to poor timing performance. In this case using _olo_base_decode_firstbit_ makes sense - because it allows pipelining the operation. The figure below assumes _InReg_g=false_, _OutReg_g=false_ and _PlRegs_g=2_.","
+"This entity implements a first-bit decoder. It does return the index of the lowest bit set in a vector. First bit decoding can be done in only a few lines of code if all the decoding is done in one clock cycles. However, for doing first-bit decoding on very wide vectors this leads to poor timing performance. In this case using _olo_base_decode_firstbit_ makes sense - because it allows pipelining the operation. The figure below assumes _InReg_g=false_, _OutReg_g=false_ and _PlRegs_g=2_.
+
+# VHDL Analysis for 'olo_base_decode_firstbit.vhd'
+
+## File Comments
+- -------------------------------------------------------------------------------------------------
+- Copyright (c) 2024 by Oliver Bründler
+- All rights reserved.
+- Authors: Oliver Bruendler
+- -------------------------------------------------------------------------------------------------
+- -------------------------------------------------------------------------------------------------
+- Description
+- -------------------------------------------------------------------------------------------------
+- This entity implements a pipelined first bit decoder. It finds out which
+- is the lowest index of a bit set in the input vecotr.
+- Plus 50 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Library: work
+- Use: an older version, the documentation might not match the code.
+
+---------------------------------------------------------------------------------------------------
+-- Libraries
+---------------------------------------------------------------------------------------------------
+library ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+- Use: ieee.math_real.all
+- Use: work.olo_base_pkg_math.all
+- Use: work.olo_base_pkg_logic.all
+
+## Entity: olo_base_decode_firstbit
+
+## Architecture: rtl of olo_base_decode_firstbit
+
+### Signals
+- r: TwoProcess_r
+- r_next: TwoProcess_r
+- ***
+        r_next <= v;
+    end process;
+
+    -----------------------------------------------------------------------------------------------
+    -- Sequential Proccess
+    -----------------------------------------------------------------------------------------------
+    p_seq: process (Clk) is
+    begin
+        if rising_edge(Clk) then
+            r <= r_next
+
+### Processes
+- Process 'p_comb :' (Has Reset) with sensitivity list: r, In_Data, In_Valid
+  - Implements case-based selection logic
+- Process 'p_seq :' (Clocked) (Has Reset) with sensitivity list: Clk
+  - Implements synchronous logic
+- Process 'Unnamed process' (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements case-based selection logic
+- Process 'p_seq :' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+
+### Concurrent Statements
+- -- *** Optional Input Register ***
+        DataIn_v := (others => '0')
+- if InReg_g then
+            v.DataIn                       := In_Data
+- v.ValidIn                      := In_Valid
+- InValid_v                      := r.ValidIn
+- DataIn_v(InWidth_g-1 downto 0) := r.DataIn
+- Plus 2 more statements
+
+## Functional Analysis
+
+- Contains 2 clock domain(s): Clk, Clock
+- Uses reset signal(s): FirstBit, first, Reset, Rst, lowerst, First, Out_FirstBit, olo_base_decode_firstbit
+- May be part of a pipeline architecture
+
+## Code Metrics
+- Line count: 243
+- Process count: 4
+- Signal count: 3
+
+## Summary
+- This module implements register or flip-flop functionality.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'olo_base_decode_firstbit.vhd' plays a specific role in the overall CPU architecture.
+","
 
 library ieee;
     use ieee.std_logic_1164.all;
@@ -1608,7 +2674,88 @@ begin
     end process;
 
 end architecture;"
-"This component is an efficient implementation for delay chains. It uses FPGA memory resources (Block-RAM and distributed RAM resp. SRLs) for implementing the delays (instead of many FFs). The last delay stage is always implemented in FFs to ensure good timing (RAM outputs are usually slow). The delay is specified as a number of data-beats (samples). For a delay in clock-cycles, simply connect _In_Valid_='1' - or lave _In_Valid_ unconnected to rely on its default value. One Problem with using RAM resources to implement delays is that they don't have a reset, so the content of the RAM persists after resetting the logic. The _olo_base_delay_ entity works around this issue by some logic that ensures that any persisting data is replaced by zeros after a reset. The replacement is done at the output of the _olo_base_delay_, so no time to overwrite memory cells after a reset is required and the entity is ready to operate on the first clock cycle after the reset. If the delay is implemented using a RAM, the behavior of the RAM (read-before-write or write-before-read) can be selected to allow efficient implementation independently of the target technology. Note that output data is valid together with Input data (when _In_Valid_ is high). Below figure shows the behavior for _Delay_g_=3 with both possible settings for _RstState_g_: In cases a delayed version of an AXI4-Stream with back-pressure (_Ready_ signal) is required, the ANDed _Ready_ and _Valid_ signals shall be connected to the _In_Valid_ input of _olo_base_delay_.","
+"This component is an efficient implementation for delay chains. It uses FPGA memory resources (Block-RAM and distributed RAM resp. SRLs) for implementing the delays (instead of many FFs). The last delay stage is always implemented in FFs to ensure good timing (RAM outputs are usually slow). The delay is specified as a number of data-beats (samples). For a delay in clock-cycles, simply connect _In_Valid_='1' - or lave _In_Valid_ unconnected to rely on its default value. One Problem with using RAM resources to implement delays is that they don't have a reset, so the content of the RAM persists after resetting the logic. The _olo_base_delay_ entity works around this issue by some logic that ensures that any persisting data is replaced by zeros after a reset. The replacement is done at the output of the _olo_base_delay_, so no time to overwrite memory cells after a reset is required and the entity is ready to operate on the first clock cycle after the reset. If the delay is implemented using a RAM, the behavior of the RAM (read-before-write or write-before-read) can be selected to allow efficient implementation independently of the target technology. Note that output data is valid together with Input data (when _In_Valid_ is high). Below figure shows the behavior for _Delay_g_=3 with both possible settings for _RstState_g_: In cases a delayed version of an AXI4-Stream with back-pressure (_Ready_ signal) is required, the ANDed _Ready_ and _Valid_ signals shall be connected to the _In_Valid_ input of _olo_base_delay_.
+
+# VHDL Analysis for 'olo_base_delay.vhd'
+
+## File Comments
+- -------------------------------------------------------------------------------------------------
+- Copyright (c) 2018 by Paul Scherrer Institute, Switzerland
+- Copyright (c) 2024-2025 by Oliver Bründler
+- All rights reserved.
+- Authors: Oliver Bruendler
+- -------------------------------------------------------------------------------------------------
+- -------------------------------------------------------------------------------------------------
+- Description
+- -------------------------------------------------------------------------------------------------
+- This is a delay element. It is either emplemented in BRAM or SRL. The output
+- Plus 32 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Library: work
+- Use: an older version, the documentation might not match the code.
+
+---------------------------------------------------------------------------------------------------
+-- Libraries
+---------------------------------------------------------------------------------------------------
+library ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+- Use: work.olo_base_pkg_math.all
+- Use: work.olo_base_pkg_attribute.all
+
+## Entity: olo_base_delay
+
+## Architecture: rtl of olo_base_delay
+
+### Signals
+- MemOut: std_logic_vector(Width_g - 1 downto 0)
+- SrlSig: Srl_t := (others => (others => '0'))
+- is ShregExtract_AllowExtraction_c;
+        attribute srl_style of SrlSig: signal is SrlStyle_Srl_c
+- RdAddr: std_logic_vector(log2ceil(MemTaps_c) - 1 downto 0) := (others => '0')
+- WrAddr: std_logic_vector(log2ceil(MemTaps_c) - 1 downto 0) := (others => '0')
+- RstStateCnt: integer range 0 to Delay_g - 1
+
+### Component Instantiations
+- Instance 'i_bram' of component 'olo_base_ram_sdp'
+
+### Processes
+- Process 'p_srl :' (Clocked) with sensitivity list: Clk
+  - Implements synchronous logic
+- Process 'p_bram :' (Clocked) (Has Reset) with sensitivity list: Clk
+  - Implements synchronous logic with reset
+- Process 'p_outreg :' (Clocked) (Has Reset) with sensitivity list: Clk
+  - Implements synchronous logic with reset
+- Process 'p_srl :' (Clocked) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic with reset
+- Process 'p_outreg :' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic with reset
+
+### Concurrent Statements
+- SrlSig(1 to SrlSig'high) <= SrlSig(0 to SrlSig'high - 1)
+
+## Functional Analysis
+
+- Contains 1 clock domain(s): Clk
+- Uses reset signal(s): Reset, Rst, RstState_g, RstStateCnt
+- Implements memory functionality
+- Implements control logic
+- May be part of a pipeline architecture
+
+## Code Metrics
+- Line count: 192
+- Process count: 6
+- Signal count: 6
+
+## Summary
+- This module implements control logic.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'olo_base_delay.vhd' plays a specific role in the overall CPU architecture.
+","
 
 library ieee;
     use ieee.std_logic_1164.all;
@@ -1754,7 +2901,81 @@ begin
     end generate;
 
 end architecture;"
-"This component is an efficient implementation for runtime configurable delay chains. It uses FPGA memory resources (Block-RAM) for implementing the delays (instead of many FFs). The last delay stage is always implemented in FFs to ensure good timing (RAM outputs are usually slow). For general usage of the _olo_base_delay_cfg_ entity, the same considerations as for [olo_base_delay](./olo_base_delay.md) apply. Refer to this documentation for details on the input and output signaling. Note that any changes of the delay are reflected at the output (_Out_Data_) within less than 5 samples / data-beats. During those 5 samples, the content of (_Out_Data_) is undefined. This is illustrated in the figure below.","
+"This component is an efficient implementation for runtime configurable delay chains. It uses FPGA memory resources (Block-RAM) for implementing the delays (instead of many FFs). The last delay stage is always implemented in FFs to ensure good timing (RAM outputs are usually slow). For general usage of the _olo_base_delay_cfg_ entity, the same considerations as for [olo_base_delay](./olo_base_delay.md) apply. Refer to this documentation for details on the input and output signaling. Note that any changes of the delay are reflected at the output (_Out_Data_) within less than 5 samples / data-beats. During those 5 samples, the content of (_Out_Data_) is undefined. This is illustrated in the figure below.
+
+# VHDL Analysis for 'olo_base_delay_cfg.vhd'
+
+## File Comments
+- -------------------------------------------------------------------------------------------------
+- Copyright (c) 2018 by Paul Scherrer Institute, Switzerland
+- Copyright (c) 2024 by Oliver Bründler
+- All rights reserved.
+- Authors: Benoit Stef & Oliver Bruendler
+- -------------------------------------------------------------------------------------------------
+- -------------------------------------------------------------------------------------------------
+- Description
+- -------------------------------------------------------------------------------------------------
+- This is a delay element. It is either implemented in BRAM & SRL. The output
+- Plus 30 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Library: work
+- Use: an older version, the documentation might not match the code.
+
+---------------------------------------------------------------------------------------------------
+-- Libraries
+---------------------------------------------------------------------------------------------------
+library ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+- Use: work.olo_base_pkg_math.all
+
+## Entity: olo_base_delay_cfg
+
+## Architecture: rtl of olo_base_delay_cfg
+
+### Signals
+- SrlSig: Srl_t                                  := (others => (others => '0'))
+- OutNonzero: std_logic_vector(Width_g - 1 downto 0)
+- MemOut: std_logic_vector(Width_g - 1 downto 0) := (others => '0')
+- RdAddr: std_logic_vector(log2ceil(MaxDelay_g) - 1 downto 0) := (others => '0')
+- WrAddr: std_logic_vector(log2ceil(MaxDelay_g) - 1 downto 0) := (others => '0')
+
+### Processes
+- Process 'p_bram :' (Clocked) (Has Reset) with sensitivity list: Clk
+  - Implements synchronous logic with reset
+- Process 'p_srl :' (Clocked) with sensitivity list: Clk
+  - Implements synchronous logic
+- Process 'p_outreg :' (Clocked) (Has Reset) with sensitivity list: Clk
+  - Implements synchronous logic with reset
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic with reset
+- Process 'p_srl :' (Clocked) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+- Process 'p_outreg :' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic with reset
+
+### Concurrent Statements
+- RdAddr <= std_logic_vector(unsigned(WrAddr) - unsigned(Delay) + 3)
+
+## Functional Analysis
+
+- Contains 1 clock domain(s): Clk
+- Uses reset signal(s): Reset, Rst
+- Implements memory functionality
+- Implements control logic
+
+## Code Metrics
+- Line count: 157
+- Process count: 6
+- Signal count: 5
+
+## Summary
+- This module implements control logic.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'olo_base_delay_cfg.vhd' plays a specific role in the overall CPU architecture.
+","
 
 library ieee;
     use ieee.std_logic_1164.all;
@@ -1868,7 +3089,89 @@ begin
     end generate;
 
 end architecture;"
-"This entity implements a dynamic shift (barrel shift) implemented in multiple stages in order to achieve good timing. The number of bits to shift can be selected at runtime for each data-sample.","
+"This entity implements a dynamic shift (barrel shift) implemented in multiple stages in order to achieve good timing. The number of bits to shift can be selected at runtime for each data-sample.
+
+# VHDL Analysis for 'olo_base_dyn_sft.vhd'
+
+## File Comments
+- -------------------------------------------------------------------------------------------------
+- Copyright (c) 2020 by Oliver Bruendler
+- Copyright (c) 2024 by Oliver Bründler
+- All rights reserved.
+- Authors: Oliver Bruendler
+- -------------------------------------------------------------------------------------------------
+- -------------------------------------------------------------------------------------------------
+- Description
+- -------------------------------------------------------------------------------------------------
+- This entity implements a dynamic shift implemented in multiple stages in
+- Plus 30 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Library: work
+- Use: an older version, the documentation might not match the code.
+
+---------------------------------------------------------------------------------------------------
+-- Libraries
+---------------------------------------------------------------------------------------------------
+library ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+- Use: ieee.math_real.all
+- Use: work.olo_base_pkg_math.all
+- Use: work.olo_base_pkg_logic.all
+- Use: this line can't be reached in valid configurations
+            -- coverage off
+            else
+                report ""###ERROR###: olo_base_dyn_sft - Direction_g must be LEFT or RIGHT, is '"" & Direction_g & ""'"" severity error
+
+## Entity: olo_base_dyn_sft
+
+## Architecture: rtl of olo_base_dyn_sft
+
+### Signals
+- r: TwoProcess_t
+- r_next: TwoProcess_t
+
+### Processes
+- Process 'p_comb :' (Has Reset) with sensitivity list: r, In_Valid, In_Data, In_Shift
+  - Implements conditional logic
+- Process 'p_seq :' (Clocked) (Has Reset) with sensitivity list: Clk
+  - Implements synchronous logic
+- Process 'Unnamed process' (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements conditional logic
+- Process 'Unnamed process' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+
+### Concurrent Statements
+- -- Input stages
+        v.Data(0)  := In_Data
+- v.Shift(0) := In_Shift
+- v.Vld(0)   := In_Valid
+- -- Shift stages
+        for stg in 0 to Stages_c - 1 loop
+            -- Stage constants calculation
+            StepSize_v := 2**(stg * SelBitsPerStageLimited_c)
+- -- Shift implementation
+            Select_v := to_integer(unsigned(r.Shift(stg)(SelBitsPerStageLimited_c - 1 downto 0)))
+- Plus 2 more statements
+
+## Functional Analysis
+
+- Contains 1 clock domain(s): Clk
+- Uses reset signal(s): Rst, SelBitsPerStageLimited_c, SelBitsPerStage_g
+- May be part of a pipeline architecture
+
+## Code Metrics
+- Line count: 151
+- Process count: 4
+- Signal count: 2
+
+## Summary
+- This module appears to be a general-purpose digital logic implementation.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'olo_base_dyn_sft.vhd' plays a specific role in the overall CPU architecture.
+","
 
 library ieee;
     use ieee.std_logic_1164.all;
@@ -1976,7 +3279,170 @@ begin
     end process;
 
 end architecture;"
-"This component implements an asynchronous FIFO (different clocks for write and read port). The memory is described in a way that it utilizes RAM resources (Block-RAM or distributed RAM) available in FPGAs with commonly used tools. For this purpose [olo_base_ram_sdp](./olo_base_ram_sdp.md) is used. The FIFO is a fall-through FIFO and has AXI-S interfaces on read and write side. The RAM behavior (read-before-write or write-before-read) can be selected. This allows efficiently implementing FIFOs for different technologies (some technologies implement one, some the other behavior). An asynchronous FIFO is a clock-crossing and hence this block follows the general [clock-crossing principles](clock_crossing_principles.md). Read through them for more information.","
+"This component implements an asynchronous FIFO (different clocks for write and read port). The memory is described in a way that it utilizes RAM resources (Block-RAM or distributed RAM) available in FPGAs with commonly used tools. For this purpose [olo_base_ram_sdp](./olo_base_ram_sdp.md) is used. The FIFO is a fall-through FIFO and has AXI-S interfaces on read and write side. The RAM behavior (read-before-write or write-before-read) can be selected. This allows efficiently implementing FIFOs for different technologies (some technologies implement one, some the other behavior). An asynchronous FIFO is a clock-crossing and hence this block follows the general [clock-crossing principles](clock_crossing_principles.md). Read through them for more information.
+
+# VHDL Analysis for 'olo_base_fifo_async.vhd'
+
+## File Comments
+- -------------------------------------------------------------------------------------------------
+- Copyright (c) 2018 by Paul Scherrer Institute, Switzerland
+- Copyright (c) 2024 by Oliver Bründler
+- All rights reserved.
+- Authors: Oliver Bruendler
+- -------------------------------------------------------------------------------------------------
+- -------------------------------------------------------------------------------------------------
+- Description
+- -------------------------------------------------------------------------------------------------
+- This is a very basic asynchronous FIFO. The clocks can be fully asynchronous
+- Plus 51 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Library: work
+- Use: an older version, the documentation might not match the code.
+
+---------------------------------------------------------------------------------------------------
+-- Libraries
+---------------------------------------------------------------------------------------------------
+library ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+- Use: work.olo_base_pkg_math.all
+- Use: work.olo_base_pkg_logic.all
+- Use: unregistered signal because CC contains register
+            Out_Clk  => In_Clk,
+            Out_Rst  => RstInInt,
+            Out_Data => RdAddrGray
+        )
+
+## Entity: olo_base_fifo_async
+
+## Architecture: rtl of olo_base_fifo_async
+
+### Signals
+- ri: TwoProcessIn_r := (WrAddr          => (others => '0'),
+                                             WrAddrGray     => (others => '0'),
+                                             RdAddr         => (others => '0'),
+                                             WrAddrReg      => (others => '0'),
+                                             RamWr          => '0',
+                                            DataReg         => (others => '0'))
+- ri_next: TwoProcessIn_r := (WrAddr          => (others => '0'),
+                                             WrAddrGray     => (others => '0'),
+                                             RdAddr         => (others => '0'),
+                                             WrAddrReg      => (others => '0'),
+                                             RamWr          => '0',
+                                            DataReg         => (others => '0'))
+- ro: TwoProcessOut_r := (RdAddr          => (others => '0'),
+                                              RdAddrGray     => (others => '0'),
+                                              WrAddr         => (others => '0'),
+                                              OutLevel       => (others => '0'))
+- ro_next: TwoProcessOut_r := (RdAddr          => (others => '0'),
+                                              RdAddrGray     => (others => '0'),
+                                              WrAddr         => (others => '0'),
+                                              OutLevel       => (others => '0'))
+- RstInInt: std_logic
+- RstOutInt: std_logic
+- RamRdAddr: std_logic_vector(RamAddrWidth_c-1 downto 0)
+- RamWrAddr: std_logic_vector(RamAddrWidth_c-1 downto 0)
+- RamWr: std_logic
+- RamWrData: std_logic_vector(Width_g-1 downto 0)
+- WrAddrGray: std_logic_vector(AddrWidth_c-1 downto 0)
+- RdAddrGray: std_logic_vector(AddrWidth_c-1 downto 0)
+- WrAddrGrayIn: std_logic_vector(AddrWidth_c-1 downto 0)
+- RdAddrGrayIn: std_logic_vector(AddrWidth_c-1 downto 0)
+- ***
+        ri_next <= vi;
+        ro_next <= vo;
+
+    end process;
+
+    p_seq_in: process (In_Clk) is
+    begin
+        if rising_edge(In_Clk) then
+            ri <= ri_next
+- because CC contains register
+            Out_Clk  => In_Clk: entity work.olo_base_cc_reset
+        port map (
+            A_Clk       => In_Clk,
+            A_RstIn     => In_Rst,
+            A_RstOut    => RstInInt,
+            B_Clk       => Out_Clk,
+            B_RstIn     => Out_Rst,
+            B_RstOut    => RstOutInt
+        )
+- Out_Rst  => RstInInt: entity work.olo_base_cc_reset
+        port map (
+            A_Clk       => In_Clk,
+            A_RstIn     => In_Rst,
+            A_RstOut    => RstInInt,
+            B_Clk       => Out_Clk,
+            B_RstIn     => Out_Rst,
+            B_RstOut    => RstOutInt
+        )
+- Out_Data => RdAddrGray
+        );
+
+    -- Reset CC
+    i_rst_cc: entity work.olo_base_cc_reset
+        port map (
+            A_Clk       => In_Clk,
+            A_RstIn     => In_Rst,
+            A_RstOut    => RstInInt,
+            B_Clk       => Out_Clk,
+            B_RstIn     => Out_Rst,
+            B_RstOut    => RstOutInt
+        )
+
+### Component Instantiations
+- Instance 'i_ram' of component 'olo_base_ram_sdp'
+- Instance 'i_cc_wr_rd' of component 'olo_base_cc_bits'
+- Instance 'i_cc_rd_wr' of component 'olo_base_cc_bits'
+- Instance 'i_rst_cc' of component 'olo_base_cc_reset'
+
+### Processes
+- Process 'p_comb :' (Has Reset) with sensitivity list: In_Valid, Out_Ready, ri, ro, RstInInt, WrAddrGray, RdAddrGray, In_Data
+  - Implements conditional logic
+- Process 'p_seq_in :' (Clocked) (Has Reset) with sensitivity list: In_Clk
+  - Implements synchronous logic
+- Process 'p_seq_out :' (Clocked) (Has Reset) with sensitivity list: Out_Clk
+  - Implements synchronous logic
+- Process 'Unnamed process' (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements conditional logic
+- Process 'p_seq_in :' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+- Process 'p_seq_out :' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+
+### Concurrent Statements
+- vo := ro
+- -- *** Write Side ***
+        -- Defaults
+        In_Ready    <= '0'
+- In_Full     <= '0'
+- In_Empty    <= '0'
+- In_AlmFull  <= '0'
+- Plus 8 more statements
+
+## Functional Analysis
+
+- Contains 7 clock domain(s): Clk, Out_Clk, B_Clk, In_Clk, A_Clk, Rd_Clk, Clock
+- Uses reset signal(s): B_RstIn, i_rst_cc, olo_base_cc_reset, A_RstIn, ReadyRstState_g, RstInInt, reset, Reset, In_RstOut, A_RstOut, In_Rst, Out_RstOut, RstOutInt, Out_Rst, B_RstOut
+- Implements memory functionality
+- Implements interface or communication protocol
+- May be part of a pipeline architecture
+- This appears to be a CPU component
+- Implements instruction execution functionality
+
+## Code Metrics
+- Line count: 344
+- Process count: 6
+- Signal count: 18
+
+## Summary
+- This module implements register or flip-flop functionality.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'olo_base_fifo_async.vhd' plays a specific role in the overall CPU architecture.
+","
 
 library ieee;
     use ieee.std_logic_1164.all;
@@ -2263,7 +3729,113 @@ begin
     In_RstOut  <= RstInInt;
 
 end architecture;"
-"This component implements a synchronous packet FIFO. The FIFO works in store and forward mode. This means a packet is only presented to the output after it is written into the FIFO completely. This component offers the following additional features compared to [olo_base_fifo_sync](./olo_base_fifo_sync.md): - Due to the store and forward implementation, packets are compressed. Even if the data is written into the FIFO at low rate, it is guaranteed that the packet can be read in a single short burst once it is presented at the output. - Writing of a packet into a FIFO can be aborted at any time during writing the packet (see [Dropping Packets on Write Side](#dropping-packets-on-write-side)). The write pointer is automatically rewinded in this case. - Example use-case: A CRC error can only be detected at the end of the packet. User logic can still write the packet into the FIFO directly and just asserts _In_Drop_ if a CRC error is detected at the end of the packet. The full packet (including already written data) is ignored. - On the read side, it is possible to skip the remaining data of a packet at any time during reading a packet (see [Skipping Packets on Read Side](#skipping-packets-on-read-side)). - Example use-case: The user logic is interested only in some packet types. If a different packet type is found in the header, _Out_Next_ can be asserted to skip the rest of the packet and directly continue reading the next packet. - On the read side, it is possible to repeat a packet (see [Repeating Packets on Read Side](#repeating-packets-on-read-side)). - Example use-case: A packet is read from the FIFO and transmitted wirelessly. During sending the packet a collision occurs and the transmission is aborted. In this situation the user logic can assert _Out_Repeat_ to read the same packet again and retry the transmission. Below samples assumes _Depth_g_=32. The memory is described in a way that it utilizes RAM resources (Block-RAM or distributed RAM) available in FPGAs with commonly used tools. For this purpose [olo_base_ram_sdp](./olo_base_ram_sdp.md) is used. The FIFO  has AXI-S interfaces on read and write side. The RAM behavior (read-before-write or write-before-read) can be selected. This allows efficiently implementing FIFOs for different technologies (some technologies implement one, some the other behavior). The FIFO contains a large RAM for packet data and a small [olo_base_fifo_sync](./olo_base_fifo_sync.md) for storing the sizes of individual packets. **Note:** Due to implementation reasons the FIFO introduces one stall cycle per packet on the read-side. Hence the FIFO throughput is suboptimal for very small packets. Packets exceeding _Depth_g_ cannot be processed in store and forward mode and are therefore dropped automatically.","
+"This component implements a synchronous packet FIFO. The FIFO works in store and forward mode. This means a packet is only presented to the output after it is written into the FIFO completely. This component offers the following additional features compared to [olo_base_fifo_sync](./olo_base_fifo_sync.md): - Due to the store and forward implementation, packets are compressed. Even if the data is written into the FIFO at low rate, it is guaranteed that the packet can be read in a single short burst once it is presented at the output. - Writing of a packet into a FIFO can be aborted at any time during writing the packet (see [Dropping Packets on Write Side](#dropping-packets-on-write-side)). The write pointer is automatically rewinded in this case. - Example use-case: A CRC error can only be detected at the end of the packet. User logic can still write the packet into the FIFO directly and just asserts _In_Drop_ if a CRC error is detected at the end of the packet. The full packet (including already written data) is ignored. - On the read side, it is possible to skip the remaining data of a packet at any time during reading a packet (see [Skipping Packets on Read Side](#skipping-packets-on-read-side)). - Example use-case: The user logic is interested only in some packet types. If a different packet type is found in the header, _Out_Next_ can be asserted to skip the rest of the packet and directly continue reading the next packet. - On the read side, it is possible to repeat a packet (see [Repeating Packets on Read Side](#repeating-packets-on-read-side)). - Example use-case: A packet is read from the FIFO and transmitted wirelessly. During sending the packet a collision occurs and the transmission is aborted. In this situation the user logic can assert _Out_Repeat_ to read the same packet again and retry the transmission. Below samples assumes _Depth_g_=32. The memory is described in a way that it utilizes RAM resources (Block-RAM or distributed RAM) available in FPGAs with commonly used tools. For this purpose [olo_base_ram_sdp](./olo_base_ram_sdp.md) is used. The FIFO  has AXI-S interfaces on read and write side. The RAM behavior (read-before-write or write-before-read) can be selected. This allows efficiently implementing FIFOs for different technologies (some technologies implement one, some the other behavior). The FIFO contains a large RAM for packet data and a small [olo_base_fifo_sync](./olo_base_fifo_sync.md) for storing the sizes of individual packets. **Note:** Due to implementation reasons the FIFO introduces one stall cycle per packet on the read-side. Hence the FIFO throughput is suboptimal for very small packets. Packets exceeding _Depth_g_ cannot be processed in store and forward mode and are therefore dropped automatically.
+
+# VHDL Analysis for 'olo_base_fifo_packet.vhd'
+
+## File Comments
+- -------------------------------------------------------------------------------------------------
+- Copyright (c) 2024 by Oliver Bründler
+- All rights reserved.
+- Authors: Oliver Bruendler
+- -------------------------------------------------------------------------------------------------
+- -------------------------------------------------------------------------------------------------
+- Description
+- -------------------------------------------------------------------------------------------------
+- - This is a synchronous packet FIFO. In contrast to a normal FIFO, it allows
+- - dropping and repeating packets as well as detecting how many packets
+- Plus 93 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Library: work
+- Use: an older version, the documentation might not match the code.
+
+---------------------------------------------------------------------------------------------------
+-- Libraries
+---------------------------------------------------------------------------------------------------
+library ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+- Use: work.olo_base_pkg_math.all
+- Use: work.olo_base_pkg_logic.all
+- Use: it does not have any effect on the last word of a packet
+
+                    -- To to idle cycle for fetch after packet completed
+                    v.RdValid := '0'
+
+## Entity: olo_base_fifo_packet
+
+## Architecture: rtl of olo_base_fifo_packet
+
+### Signals
+- r: TwoProcess_r
+- r_next: TwoProcess_r
+- RamRdAddr: std_logic_vector(Addr_c)
+- FifoInReady: std_logic
+- RdPacketEnd: std_logic_vector(Addr_c)
+- RdPacketEndValid: std_logic
+- RamWrEna: std_logic
+- FifoInValid: std_logic
+- FifoOutRdy: std_logic
+- WrAddrStdlv: std_logic_vector(Addr_c)
+- r_next <= v;
+
+    end process;
+
+    -----------------------------------------------------------------------------------------------
+    -- Sequential Proccess
+    -----------------------------------------------------------------------------------------------
+    p_seq: process (Clk) is
+    begin
+        if rising_edge(Clk) then
+            r <= r_next
+
+### Component Instantiations
+- Instance 'i_ram' of component 'olo_base_ram_sdp'
+
+### Processes
+- Process 'p_comb :' (Has Reset) with sensitivity list: In_Valid, In_Data, In_Last, In_Drop, Out_Ready, Out_Next, Out_Repeat, Rst, r,
+                      FifoInReady, RdPacketEnd, RdPacketEndValid
+  - Implements case-based selection logic
+- Process 'p_seq :' (Clocked) (Has Reset) with sensitivity list: Clk
+  - Implements synchronous logic
+- Process 'Unnamed process' (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements case-based selection logic
+- Process 'p_seq :' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+
+### Concurrent Statements
+- -- *** Write side ***
+
+        -- Default Values
+        In_Ready_v  := ((not r.Full) and FifoInReady) or r.DropLatch
+- InDrop_v    := r.DropLatch
+- RamWrEna    <= '0'
+- FifoInValid <= '0'
+- -- Implement getting free aftter Full
+        if r.WrAddr /= r.RdPacketStart then
+            v.Full := '0'
+
+## Functional Analysis
+
+- Contains 1 clock domain(s): Clk
+- Uses reset signal(s): Reset, Rst, WrAddrStdlv, ReadyRstState_g
+- Implements memory functionality
+- Implements control logic
+- This appears to be a CPU component
+- Implements instruction fetching functionality
+
+## Code Metrics
+- Line count: 421
+- Process count: 4
+- Signal count: 11
+
+## Summary
+- This module implements control logic.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'olo_base_fifo_packet.vhd' plays a specific role in the overall CPU architecture.
+","
 
 library ieee;
     use ieee.std_logic_1164.all;
@@ -2586,7 +4158,98 @@ begin
         );
 
 end architecture;"
-"This component implements a synchronous FIFO (same clock for write and read port). The memory is described in a way that it utilizes RAM resources (Block-RAM or distributed RAM) available in FPGAs with commonly used tools. For this purpose [olo_base_ram_sdp](./olo_base_ram_sdp.md) is used. The FIFO is a fall-through FIFO and has AXI-S interfaces on read and write side. The RAM behavior (read-before-write or write-before-read) can be selected. This allows efficiently implementing FIFOs for different technologies (some technologies implement one, some the other behavior).","
+"This component implements a synchronous FIFO (same clock for write and read port). The memory is described in a way that it utilizes RAM resources (Block-RAM or distributed RAM) available in FPGAs with commonly used tools. For this purpose [olo_base_ram_sdp](./olo_base_ram_sdp.md) is used. The FIFO is a fall-through FIFO and has AXI-S interfaces on read and write side. The RAM behavior (read-before-write or write-before-read) can be selected. This allows efficiently implementing FIFOs for different technologies (some technologies implement one, some the other behavior).
+
+# VHDL Analysis for 'olo_base_fifo_sync.vhd'
+
+## File Comments
+- -------------------------------------------------------------------------------------------------
+- Copyright (c) 2018 by Paul Scherrer Institute, Switzerland
+- Copyright (c) 2024 by Oliver Bründler
+- All rights reserved.
+- Authors: Oliver Bruendler
+- -------------------------------------------------------------------------------------------------
+- -------------------------------------------------------------------------------------------------
+- Description
+- -------------------------------------------------------------------------------------------------
+- This is a very basic synchronous FIFO. It  has optional level- and
+- Plus 26 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Library: work
+- Use: an older version, the documentation might not match the code.
+
+---------------------------------------------------------------------------------------------------
+-- Libraries
+---------------------------------------------------------------------------------------------------
+library ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+- Use: work.olo_base_pkg_math.all
+
+## Entity: olo_base_fifo_sync
+
+## Architecture: rtl of olo_base_fifo_sync
+
+### Signals
+- r: TwoProcess_r
+- r_next: TwoProcess_r
+- RamWr: std_logic
+- RamRdAddr: std_logic_vector(log2ceil(Depth_g) - 1 downto 0)
+- r_next <= v;
+
+    end process;
+
+    -- Synchronous Outputs
+    Out_Level <= r.RdLevel;
+    In_Level  <= r.WrLevel;
+
+    p_seq: process (Clk) is
+    begin
+        if rising_edge(Clk) then
+            r <= r_next
+
+### Component Instantiations
+- Instance 'i_ram' of component 'olo_base_ram_sdp'
+
+### Processes
+- Process 'p_comb :' (Has Reset) with sensitivity list: In_Valid, Out_Ready, Rst, r
+  - Implements conditional logic
+- Process 'p_seq :' (Clocked) (Has Reset) with sensitivity list: Clk
+  - Implements synchronous logic
+- Process 'Unnamed process' (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements conditional logic
+- Process 'p_seq :' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+
+### Concurrent Statements
+- -- Write side
+        v.RdUp := '0'
+- RamWr  <= '0'
+- if unsigned(r.WrLevel) /= Depth_g and In_Valid = '1' then
+            if unsigned(r.WrAddr) /= Depth_g - 1 then
+                v.WrAddr := std_logic_vector(unsigned(r.WrAddr) + 1)
+- else
+                v.WrAddr := (others => '0')
+
+## Functional Analysis
+
+- Contains 1 clock domain(s): Clk
+- Uses reset signal(s): Rst, reset, ReadyRstState_g
+- Implements memory functionality
+- Implements control logic
+
+## Code Metrics
+- Line count: 204
+- Process count: 4
+- Signal count: 5
+
+## Summary
+- This module implements control logic.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'olo_base_fifo_sync.vhd' plays a specific role in the overall CPU architecture.
+","
 
 library ieee;
     use ieee.std_logic_1164.all;
@@ -2751,7 +4414,68 @@ begin
         );
 
 end architecture;"
-"This component implements full flow-control (including Ready/back-pressure) around processing entities that do not support Ready/back-pressure natively. The usage is depicted below: The _olo_base_flowctrl_handler_ includes a small FIFO buffer and ensures to de-assert _In_Ready_ in a way that remaining output samples from processing can be absorbed without data-loss when _Out_Ready_ is de-asserted. The FIFO buffer is chosen large enough to provide full throughput (i.e. not add any needless stall-cycles). For processing entities that do not even provide the handling of the _Valid_ flag, the _Valid_ flag handling can easily be implemented by adding an [olo_base_delay](*./olo_base_delay.md) component with the same delay as the processingitself:","
+"This component implements full flow-control (including Ready/back-pressure) around processing entities that do not support Ready/back-pressure natively. The usage is depicted below: The _olo_base_flowctrl_handler_ includes a small FIFO buffer and ensures to de-assert _In_Ready_ in a way that remaining output samples from processing can be absorbed without data-loss when _Out_Ready_ is de-asserted. The FIFO buffer is chosen large enough to provide full throughput (i.e. not add any needless stall-cycles). For processing entities that do not even provide the handling of the _Valid_ flag, the _Valid_ flag handling can easily be implemented by adding an [olo_base_delay](*./olo_base_delay.md) component with the same delay as the processingitself:
+
+# VHDL Analysis for 'olo_base_flowctrl_handler.vhd'
+
+## File Comments
+- -------------------------------------------------------------------------------------------------
+- Copyright (c) 2024 by Oliver Bründler
+- All rights reserved.
+- Authors: Oliver Bruendler
+- -------------------------------------------------------------------------------------------------
+- -------------------------------------------------------------------------------------------------
+- Description
+- -------------------------------------------------------------------------------------------------
+- Implements full flow-control handling (including Ready/backpressure) for
+- processing entities that do not support flow-control natively.
+- Plus 24 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Use: an older version, the documentation might not match the code.
+
+---------------------------------------------------------------------------------------------------
+-- Libraries
+---------------------------------------------------------------------------------------------------
+library ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+
+## Entity: olo_base_flowctrl_handler
+
+## Architecture: rtl of olo_base_flowctrl_handler
+
+### Signals
+- Fifo_InReady: std_logic
+- Fifo_HalfEmpty: std_logic
+
+### Component Instantiations
+- Instance 'i_fifo' of component 'olo_base_fifo_sync'
+
+### Processes
+- Process 'p_assert :' (Clocked) with sensitivity list: Clk
+  - Implements synchronous logic
+- Process 'p_assert :' (Clocked) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+
+## Functional Analysis
+
+- Contains 1 clock domain(s): Clk
+- Uses reset signal(s): Rst
+- Implements memory functionality
+- Implements control logic
+
+## Code Metrics
+- Line count: 110
+- Process count: 2
+- Signal count: 2
+
+## Summary
+- This appears to be a top-level module in the design.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'olo_base_flowctrl_handler.vhd' plays a specific role in the overall CPU architecture.
+","
 
 library ieee;
     use ieee.std_logic_1164.all;
@@ -2825,7 +4549,47 @@ begin
     end process;
 
 end architecture;"
-"This package contains different array types which are used in _Open Logic_ internally but also on its interfaces to the user (e.g. for generics). The package is written mainly for these purposes and does not aim for completeness - nevertheless as a user you are free to use it for your code of course.","
+"This package contains different array types which are used in _Open Logic_ internally but also on its interfaces to the user (e.g. for generics). The package is written mainly for these purposes and does not aim for completeness - nevertheless as a user you are free to use it for your code of course.
+
+# VHDL Analysis for 'olo_base_pkg_array.vhd'
+
+## File Comments
+- -------------------------------------------------------------------------------------------------
+- Copyright (c) 2018 by Paul Scherrer Institute, Switzerland
+- Copyright (c) 2024 by Oliver Bründler
+- All rights reserved.
+- Authors: Waldemar Koprek, Oliver Bruendler
+- -------------------------------------------------------------------------------------------------
+- -------------------------------------------------------------------------------------------------
+- Description
+- -------------------------------------------------------------------------------------------------
+- Package containing commonly used array types
+- Plus 16 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Use: an older version, the documentation might not match the code.
+
+---------------------------------------------------------------------------------------------------
+-- Libraries
+---------------------------------------------------------------------------------------------------
+library ieee
+- Use: ieee.std_logic_1164.all
+
+## Functional Analysis
+
+- Defines custom functions: arrayInteger2Real, arrayStdl2Bool, arrayBool2Stdl, arrayInteger2Real, arrayStdl2Bool, arrayBool2Stdl
+
+## Code Metrics
+- Line count: 120
+- Process count: N/A
+- Signal count: N/A
+
+## Summary
+- This module appears to be a general-purpose digital logic implementation.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'olo_base_pkg_array.vhd' plays a specific role in the overall CPU architecture.
+","
 library ieee;
     use ieee.std_logic_1164.all;
 
@@ -2916,7 +4680,65 @@ package body olo_base_pkg_array is
     end function;
 
 end package body;"
-"This package contains synthesis attributes for various vendors. The usage is non-straightforward because different attributes must be added due to restrictions of VHDL. Also does the package only contain attributes used in Open Logic internally. As a result, **this package is meant for internal use** mainly and it is **undocumented**. Users are still free to use the package but no support will be given. If you decide to do so, orient yourself on code samples (e.g. in [olo_base_cc_bits](./olo_base_cc_bits.md) or [olo_base_ram_sdp](./olo_base_ram_sdp.md)) and on the comments within the source code of the package. Currently only one version of the package is provided. In case of unresolvable name clashes between attributes expected by different tools, the package might be provided in different versions for different tools in future.","
+"This package contains synthesis attributes for various vendors. The usage is non-straightforward because different attributes must be added due to restrictions of VHDL. Also does the package only contain attributes used in Open Logic internally. As a result, **this package is meant for internal use** mainly and it is **undocumented**. Users are still free to use the package but no support will be given. If you decide to do so, orient yourself on code samples (e.g. in [olo_base_cc_bits](./olo_base_cc_bits.md) or [olo_base_ram_sdp](./olo_base_ram_sdp.md)) and on the comments within the source code of the package. Currently only one version of the package is provided. In case of unresolvable name clashes between attributes expected by different tools, the package might be provided in different versions for different tools in future.
+
+# VHDL Analysis for 'olo_base_pkg_attribute.vhd'
+
+## File Comments
+- -------------------------------------------------------------------------------------------------
+- Copyright (c) 2025 by Oliver Bründler
+- All rights reserved.
+- Authors: Oliver Bruendler, Benoit Stef
+- -------------------------------------------------------------------------------------------------
+- -------------------------------------------------------------------------------------------------
+- Description
+- -------------------------------------------------------------------------------------------------
+- Package containing attribute definitions that work for all target vendors. The package is meant
+- for Open Logic internal use and hence not deocumented in detail.
+- Plus 58 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Use: and hence not deocumented in detail.
+--
+-- Documentation:
+-- https://github.com/open-logic/open-logic/blob/main/doc/base/olo_base_pkg_attribute.md
+--
+-- Note: The link points to the documentation of the latest release. If you
+--       use an older version, the documentation might not match the code.
+
+---------------------------------------------------------------------------------------------------
+-- Libraries
+---------------------------------------------------------------------------------------------------
+library ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+- Use: LUT as shift register
+
+    -- Tools:
+    -- - Efinity (Efinix)
+    -- - GowinEDA (Gowin)
+    attribute syn_srlstyle : string
+- Use: Gowin only accepts integer.
+    attribute syn_keep : integer
+- Use: Gowin only accepts integer.
+    attribute syn_preserve : integer
+
+## Functional Analysis
+
+- Implements memory functionality
+- Implements control logic
+
+## Code Metrics
+- Line count: 126
+- Process count: N/A
+- Signal count: N/A
+
+## Summary
+- This module implements control logic.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'olo_base_pkg_attribute.vhd' plays a specific role in the overall CPU architecture.
+","
 
 library ieee;
     use ieee.std_logic_1164.all;
@@ -2972,7 +4794,51 @@ end package;
 package body olo_base_pkg_attribute is
 
 end package body;"
-"This package contains different logic functions not defined in IEEE packages but used by _Open Logic_ internally or on its interfaces to the user (e.g. for port-widths depending on generics). The package is written mainly for these purposes and does not aim for completeness - nevertheless as a user you are free to use it for your code of course.","
+"This package contains different logic functions not defined in IEEE packages but used by _Open Logic_ internally or on its interfaces to the user (e.g. for port-widths depending on generics). The package is written mainly for these purposes and does not aim for completeness - nevertheless as a user you are free to use it for your code of course.
+
+# VHDL Analysis for 'olo_base_pkg_logic.vhd'
+
+## File Comments
+- -------------------------------------------------------------------------------------------------
+- Copyright (c) 2018 by Paul Scherrer Institute, Switzerland
+- Copyright (c) 2024 by Oliver Bründler
+- All rights reserved.
+- Authors: Oliver Bruendler
+- -------------------------------------------------------------------------------------------------
+- -------------------------------------------------------------------------------------------------
+- Description
+- -------------------------------------------------------------------------------------------------
+- Package containing logic functions.
+- Plus 41 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Library: work
+- Use: an older version, the documentation might not match the code.
+
+---------------------------------------------------------------------------------------------------
+-- Libraries
+---------------------------------------------------------------------------------------------------
+library ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+- Use: work.olo_base_pkg_math.all
+
+## Functional Analysis
+
+- May be part of a pipeline architecture
+- Defines custom functions: zerosVector, onesVector, shiftLeft, shiftRight, binaryToGray, grayToBinary, ppcOr, to01X, to01X, to01, to01, invertBitOrder, invertByteOrder, zerosVector, onesVector, shiftLeft, shiftRight, binaryToGray, grayToBinary, ppcOr, to01X, to01X, to01, to01, invertBitOrder, invertByteOrder
+
+## Code Metrics
+- Line count: 302
+- Process count: N/A
+- Signal count: N/A
+
+## Summary
+- This module appears to be a general-purpose digital logic implementation.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'olo_base_pkg_logic.vhd' plays a specific role in the overall CPU architecture.
+","
 
 library ieee;
     use ieee.std_logic_1164.all;
@@ -3220,7 +5086,51 @@ package body olo_base_pkg_logic is
     end function;
 
 end package body;"
-"This package contains different mathematics functions not defined in IEEE packages but used by _Open Logic_ internally or on its interfaces to the user (e.g. for port-widths depending on generics). The package is written mainly for these purposes and does not aim for completeness - nevertheless as a user you are free to use it for your code of course. The package uses array-types (e.g. t_abool or t_areal) defined in [olo_base_pkg_array](./olo_base_pkg_array.md).","
+"This package contains different mathematics functions not defined in IEEE packages but used by _Open Logic_ internally or on its interfaces to the user (e.g. for port-widths depending on generics). The package is written mainly for these purposes and does not aim for completeness - nevertheless as a user you are free to use it for your code of course. The package uses array-types (e.g. t_abool or t_areal) defined in [olo_base_pkg_array](./olo_base_pkg_array.md).
+
+# VHDL Analysis for 'olo_base_pkg_math.vhd'
+
+## File Comments
+- -------------------------------------------------------------------------------------------------
+- Copyright (c) 2018 by Paul Scherrer Institute, Switzerland
+- Copyright (c) 2024 by Oliver Bründler
+- All rights reserved.
+- Authors: Oliver Bruendler, Benoit Stef
+- -------------------------------------------------------------------------------------------------
+- -------------------------------------------------------------------------------------------------
+- Description
+- -------------------------------------------------------------------------------------------------
+- Package containing mathematchis functions
+- Plus 78 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Library: work
+- Use: an older version, the documentation might not match the code.
+
+---------------------------------------------------------------------------------------------------
+-- Libraries
+---------------------------------------------------------------------------------------------------
+library ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+- Use: ieee.math_real.all
+- Use: work.olo_base_pkg_array.all
+
+## Functional Analysis
+
+- Defines custom functions: log2, log2ceil, isPower2, greatestCommonFactor, leastCommonMultiple, max, min, max, min, choose, choose, choose, choose, choose, choose, choose, choose, count, count, count, int, toUslv, toSslv, toStdl, slv, fromUslv, fromSslv, fromStdl, fromString, fromString, maxArray, maxArray, minArray, minArray, countCommaSepElems, log2, log2ceil, isPower2, greatestCommonFactor, leastCommonMultiple, max, max, min, min, choose, choose, choose, choose, choose, choose, choose, choose, count, count, count, toUslv, toSslv, toStdl, fromUslv, fromSslv, fromStdl, fromString, fromString, maxArray, maxArray, minArray, minArray
+
+## Code Metrics
+- Line count: 660
+- Process count: N/A
+- Signal count: N/A
+
+## Summary
+- This module appears to be a general-purpose digital logic implementation.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'olo_base_pkg_math.vhd' plays a specific role in the overall CPU architecture.
+","
 
 library ieee;
     use ieee.std_logic_1164.all;
@@ -3789,7 +5699,51 @@ package body olo_base_pkg_math is
     end function;
 
 end package body;"
-"This package contains useful string-related functions.","
+"This package contains useful string-related functions.
+
+# VHDL Analysis for 'olo_base_pkg_string.vhd'
+
+## File Comments
+- -------------------------------------------------------------------------------------------------
+- Copyright (c) 2025 by Oliver Bründler
+- All rights reserved.
+- Authors: Oliver Bruendler
+- -------------------------------------------------------------------------------------------------
+- -------------------------------------------------------------------------------------------------
+- Description
+- -------------------------------------------------------------------------------------------------
+- Package containing commonly used string manipulation functionality.
+- Documentation:
+- Plus 38 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Library: work
+- Use: an older version, the documentation might not match the code.
+
+---------------------------------------------------------------------------------------------------
+-- Libraries
+---------------------------------------------------------------------------------------------------
+library ieee
+- Use: ieee.std_logic_1164.all
+- Use: work.olo_base_pkg_math.all
+
+## Functional Analysis
+
+- Uses reset signal(s): first
+- Implements arithmetic/computational functionality
+- Defines custom functions: toUpper, toLower, trim, hex2StdLogicVector, countOccurence, toUpper, toLower, trim, hex2StdLogicVector, countOccurence
+
+## Code Metrics
+- Line count: 202
+- Process count: N/A
+- Signal count: N/A
+
+## Summary
+- This module appears to be a general-purpose digital logic implementation.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'olo_base_pkg_string.vhd' plays a specific role in the overall CPU architecture.
+","
 library ieee;
     use ieee.std_logic_1164.all;
 
@@ -3940,7 +5894,80 @@ package body olo_base_pkg_string is
     end function;
 
 end package body;"
-"This entity implements multiple pipeline stages with handshaking (AXI-S Ready/Valid). The pipeline stage ensures all signals are registered in both directions (including Ready). This is important to break long logic chains that can occur in the Ready  paths because Ready is often forwarded asynchronously. _olo_base_pl_stage_ is used for two main cases: - Breaking long logic paths into several sections, each one having a propagation time shorter than the clock period. In this case _olo_base_pl_stage_ usually is configured for _Stages_g_=1. - Adding multiple register stages for long routing paths. In this case _olo_base_pl_stage_ usually is configured for _Stages_g_>1.","
+"This entity implements multiple pipeline stages with handshaking (AXI-S Ready/Valid). The pipeline stage ensures all signals are registered in both directions (including Ready). This is important to break long logic chains that can occur in the Ready  paths because Ready is often forwarded asynchronously. _olo_base_pl_stage_ is used for two main cases: - Breaking long logic paths into several sections, each one having a propagation time shorter than the clock period. In this case _olo_base_pl_stage_ usually is configured for _Stages_g_=1. - Adding multiple register stages for long routing paths. In this case _olo_base_pl_stage_ usually is configured for _Stages_g_>1.
+
+# VHDL Analysis for 'olo_base_pl_stage.vhd'
+
+## File Comments
+- -------------------------------------------------------------------------------------------------
+- Copyright (c) 2018 by Paul Scherrer Institute, Switzerland
+- Copyright (c) 2023-2025 by Oliver Bründler
+- All rights reserved.
+- Authors: Oliver Bruendler
+- -------------------------------------------------------------------------------------------------
+- -------------------------------------------------------------------------------------------------
+- Description
+- -------------------------------------------------------------------------------------------------
+- This entity implements a pipelinestage with handshaking (AXI-S Ready/Valild). The
+- Plus 51 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Library: ieee
+- Library: work
+- Use: Rdy is often forwarded asynchronously.
+--
+-- Documentation:
+-- https://github.com/open-logic/open-logic/blob/main/doc/base/olo_base_pl_stage.md
+--
+-- Note: The link points to the documentation of the latest release. If you
+--       use an older version, the documentation might not match the code.
+
+---------------------------------------------------------------------------------------------------
+-- Libraries
+---------------------------------------------------------------------------------------------------
+
+library ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+- Use: ieee.math_real.all
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+- Use: ieee.math_real.all
+- Use: work.olo_base_pkg_attribute.all
+- Use: ready is deasserted only after one clock cycle
+                if IsStuck_v then
+                    v.DataShadVld := '1'
+
+## Entity: olo_base_pl_stage
+
+## Architecture: rtl of olo_base_pl_stage
+
+### Signals
+- Data: Data_t(0 to Stages_g)
+- Valid: std_logic_vector(0 to Stages_g)
+- Ready: std_logic_vector(0 to Stages_g)
+
+### Component Declarations
+- olo_private_pl_stage_single
+
+## Functional Analysis
+
+- Contains 2 clock domain(s): Clk, clock
+- Uses reset signal(s): Rst
+- Implements control logic
+- May be part of a pipeline architecture
+
+## Code Metrics
+- Line count: 289
+- Process count: 0
+- Signal count: 3
+
+## Summary
+- This module implements control logic.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'olo_base_pl_stage.vhd' plays a specific role in the overall CPU architecture.
+","
 
 
 library ieee;
@@ -4166,7 +6193,72 @@ begin
     end generate;
 
 end architecture;"
-"This component generates a pseudorandom binary sequence based (PRBS) on a logic feed-back shift register (LFSR) method. A set of common polynomials (aiming the maximum cycle possible) is available in [olo_base_pkg_logic](./olo_base_pkg_logic.md) and can be passed to _olo_base_prbs_ through the generic _Polynomial_g_. The number of bits per symbol which is presented at the output is configurable. Polynomials are passed as _std_logic_vector_ where a one denotes every position where x^n is used: ""100010000"" means ""x⁹ +x⁵ + 1"". The initial state of the LFSR can be configured throuh _Seed_g_ at compile time or through _State_New_ at the moment where _State_Set='1'_ is asserted at runtime. Note that the state of an LFSR never should be zero - otherwise the LFSR will stay zero forever. Note that for the case of _BitsPerSymbol_g_ > _width(Polynomial_g)_ the LFSR is shifted _before_ the first symbol is produced. Hence _Seed_g_ (after reset) resp. _State_New_ (after setting the state) is ocurring in the highest bits of the first _Out_Data_ word - and the lower bits are the first results of the LFSR calculation.","
+"This component generates a pseudorandom binary sequence based (PRBS) on a logic feed-back shift register (LFSR) method. A set of common polynomials (aiming the maximum cycle possible) is available in [olo_base_pkg_logic](./olo_base_pkg_logic.md) and can be passed to _olo_base_prbs_ through the generic _Polynomial_g_. The number of bits per symbol which is presented at the output is configurable. Polynomials are passed as _std_logic_vector_ where a one denotes every position where x^n is used: ""100010000"" means ""x⁹ +x⁵ + 1"". The initial state of the LFSR can be configured throuh _Seed_g_ at compile time or through _State_New_ at the moment where _State_Set='1'_ is asserted at runtime. Note that the state of an LFSR never should be zero - otherwise the LFSR will stay zero forever. Note that for the case of _BitsPerSymbol_g_ > _width(Polynomial_g)_ the LFSR is shifted _before_ the first symbol is produced. Hence _Seed_g_ (after reset) resp. _State_New_ (after setting the state) is ocurring in the highest bits of the first _Out_Data_ word - and the lower bits are the first results of the LFSR calculation.
+
+# VHDL Analysis for 'olo_base_prbs.vhd'
+
+## File Comments
+- -------------------------------------------------------------------------------------------------
+- Copyright (c) 2018 by Paul Scherrer Institute, Switzerland
+- Copyright (c) 2024 by Oliver Bründler
+- All rights reserved.
+- Authors: Rafael Basso, Oliver Bründler
+- -------------------------------------------------------------------------------------------------
+- -------------------------------------------------------------------------------------------------
+- Description:
+- -------------------------------------------------------------------------------------------------
+- A generic pseudo random binary sequence based on a linear-feedback shifter
+- Plus 30 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Library: work
+- Use: an older version, the documentation might not match the code.
+
+---------------------------------------------------------------------------------------------------
+-- Libraries
+---------------------------------------------------------------------------------------------------
+library ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.std_logic_misc.all
+- Use: ieee.numeric_std.all
+- Use: work.olo_base_pkg_logic.all
+- Use: work.olo_base_pkg_math.all
+
+## Entity: olo_base_prbs
+
+## Architecture: rtl of olo_base_prbs
+
+### Signals
+- LfsrReg: std_logic_vector(LfsrLenght_c-1 downto 0)
+
+### Processes
+- Process 'p_lfsr :' (Clocked) (Has Reset) with sensitivity list: Clk
+  - Implements synchronous logic with reset
+- Process 'p_lfsr :' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic with reset
+
+### Concurrent Statements
+- NextBit_v    := xor_reduce(LfsrMasked_v)
+- Lfsr_v       := Lfsr_v(Lfsr_v'high-1 downto 0) & NextBit_v
+
+## Functional Analysis
+
+- Contains 1 clock domain(s): Clk
+- Uses reset signal(s): Reset, Rst
+- Implements control logic
+- Defines custom functions: function, lfsrInitValue
+
+## Code Metrics
+- Line count: 154
+- Process count: 2
+- Signal count: 1
+
+## Summary
+- This module implements control logic.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'olo_base_prbs.vhd' plays a specific role in the overall CPU architecture.
+","
 
 library ieee;
     use ieee.std_logic_1164.all;
@@ -4278,7 +6370,102 @@ begin
     end process;
 
 end architecture;"
-"This component implements a **simple dual-port** RAM. It offers separate read and write ports. By default read and write port both run on the same clock but optionally the implementation with separate read/write clocks is supported. The RAM is implemented in pure VHDL but in a way that allows tools to implement it in block-RAMs.","
+"This component implements a **simple dual-port** RAM. It offers separate read and write ports. By default read and write port both run on the same clock but optionally the implementation with separate read/write clocks is supported. The RAM is implemented in pure VHDL but in a way that allows tools to implement it in block-RAMs.
+
+# VHDL Analysis for 'olo_base_ram_sdp.vhd'
+
+## File Comments
+- -------------------------------------------------------------------------------------------------
+- Copyright (c) 2018 by Paul Scherrer Institute, Switzerland
+- Copyright (c) 2024-2025 by Oliver Bründler
+- All rights reserved.
+- Authors: Oliver Bruendler
+- -------------------------------------------------------------------------------------------------
+- -------------------------------------------------------------------------------------------------
+- Description
+- -------------------------------------------------------------------------------------------------
+- This is a pure VHDL and vendor indpendent simple dual port RAM with
+- Plus 46 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Library: work
+- Library: ieee
+- Library: work
+- Use: an older version, the documentation might not match the code.
+
+---------------------------------------------------------------------------------------------------
+-- Libraries
+---------------------------------------------------------------------------------------------------
+library ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+- Use: work.olo_base_pkg_math.all
+- Use: work.olo_base_pkg_attribute.all
+- Use: work.olo_base_pkg_string.all
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+- Use: work.olo_base_pkg_math.all
+- Use: work.olo_base_pkg_attribute.all
+- Use: work.olo_base_pkg_string.all
+- Use: VHDL93 (supported by all tools) does not allow
+    -- ... unconstrainted arrays as return types.
+    function getInitContent return Data_t is
+        variable Data_v         : Data_t(Depth_g - 1 downto 0)               := (others => (others => '0'))
+
+## Entity: olo_base_ram_sdp
+
+## Architecture: rtl of olo_base_ram_sdp
+
+### Signals
+- Wr_Ena_Byte: std_logic
+
+### Component Declarations
+- olo_private_ram_sdp_nobe
+
+### Concurrent Statements
+- i_ram : component olo_private_ram_sdp_nobe
+                generic map (
+                    Depth_g         => Depth_g,
+                    Width_g         => 8,
+                    IsAsync_g       => IsAsync_g,
+                    RdLatency_g     => RdLatency_g,
+                    RamStyle_g      => RamStyle_g,
+                    RamBehavior_g   => RamBehavior_g,
+                    InitString_g    => InitString_g,
+                    InitFormat_g    => InitFormat_g,
+                    InitWidth_g     => Width_g,
+                    InitShift_g     => byte*8
+                )
+                port map (
+                    Clk         => Clk,
+                    Wr_Addr     => Wr_Addr,
+                    Wr_Ena      => Wr_Ena_Byte,
+                    Wr_Data     => Wr_Data(byte*8+7 downto byte*8),
+                    Rd_Clk      => Rd_Clk,
+                    Rd_Addr     => Rd_Addr,
+                    Rd_Ena      => Rd_Ena,
+                    Rd_Data     => Rd_Data(byte*8+7 downto byte*8)
+                )
+
+## Functional Analysis
+
+- Contains 2 clock domain(s): Clk, Rd_Clk
+- Implements memory functionality
+- Implements control logic
+- May be part of a pipeline architecture
+- Defines custom functions: getInitContent
+
+## Code Metrics
+- Line count: 337
+- Process count: 0
+- Signal count: 1
+
+## Summary
+- This module implements control logic.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'olo_base_ram_sdp.vhd' plays a specific role in the overall CPU architecture.
+","
 
 library ieee;
     use ieee.std_logic_1164.all;
@@ -4555,7 +6742,97 @@ begin
     Rd_Data <= RdPipe(RdLatency_g);
 
 end architecture;"
-"This component implements a **single-port** RAM. The RAM is implemented in pure VHDL but in a way that allows tools to implement it in block-RAMs.","
+"This component implements a **single-port** RAM. The RAM is implemented in pure VHDL but in a way that allows tools to implement it in block-RAMs.
+
+# VHDL Analysis for 'olo_base_ram_sp.vhd'
+
+## File Comments
+- -------------------------------------------------------------------------------------------------
+- Copyright (c) 2018 by Paul Scherrer Institute, Switzerland
+- Copyright (c) 2024-2025 by Oliver Bründler
+- All rights reserved.
+- Authors: Oliver Bruendler
+- -------------------------------------------------------------------------------------------------
+- -------------------------------------------------------------------------------------------------
+- Description
+- -------------------------------------------------------------------------------------------------
+- This is a pure VHDL and vendor indpendent true single-port RAM with
+- Plus 42 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Library: work
+- Library: ieee
+- Library: work
+- Use: an older version, the documentation might not match the code.
+
+---------------------------------------------------------------------------------------------------
+-- Libraries
+---------------------------------------------------------------------------------------------------
+library ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+- Use: work.olo_base_pkg_math.all
+- Use: work.olo_base_pkg_attribute.all
+- Use: work.olo_base_pkg_string.all
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+- Use: work.olo_base_pkg_math.all
+- Use: work.olo_base_pkg_attribute.all
+- Use: work.olo_base_pkg_string.all
+- Use: VHDL93 (supported by all tools) does not allow
+    -- ... unconstrainted arrays as return types.
+    function getInitContent return Data_t is
+        variable Data_v         : Data_t(Depth_g - 1 downto 0)               := (others => (others => '0'))
+
+## Entity: olo_base_ram_sp
+
+## Architecture: rtl of olo_base_ram_sp
+
+### Signals
+- WrEna_Byte: std_logic
+
+### Component Declarations
+- olo_private_ram_sp_nobe
+
+### Concurrent Statements
+- i_ram : component olo_private_ram_sp_nobe
+                generic map (
+                    Depth_g         => Depth_g,
+                    Width_g         => 8,
+                    RdLatency_g     => RdLatency_g,
+                    RamStyle_g      => RamStyle_g,
+                    RamBehavior_g   => RamBehavior_g,
+                    InitString_g    => InitString_g,
+                    InitFormat_g    => InitFormat_g,
+                    InitWidth_g     => Width_g,
+                    InitShift_g     => byte*8
+                )
+                port map (
+                    Clk             => Clk,
+                    Addr            => Addr,
+                    WrEna           => WrEna_Byte,
+                    WrData          => WrData(byte*8+7 downto byte*8),
+                    RdData          => RdData(byte*8+7 downto byte*8)
+                )
+
+## Functional Analysis
+
+- Contains 1 clock domain(s): Clk
+- Implements memory functionality
+- May be part of a pipeline architecture
+- Defines custom functions: getInitContent
+
+## Code Metrics
+- Line count: 281
+- Process count: 0
+- Signal count: 1
+
+## Summary
+- This module implements memory functionality.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'olo_base_ram_sp.vhd' plays a specific role in the overall CPU architecture.
+","
 
 library ieee;
     use ieee.std_logic_1164.all;
@@ -4780,7 +7057,104 @@ begin
     RdData <= RdPipe(RdLatency_g);
 
 end architecture;"
-"This component implements a **true dual-port** RAM. It offers two ports, which both allow reading and writing. The two ports run on separate clocks - although connecting the same clock to both ports is allowed. The RAM is implemented in pure VHDL but in a way that allows tools to implement it in block-RAMs.","
+"This component implements a **true dual-port** RAM. It offers two ports, which both allow reading and writing. The two ports run on separate clocks - although connecting the same clock to both ports is allowed. The RAM is implemented in pure VHDL but in a way that allows tools to implement it in block-RAMs.
+
+# VHDL Analysis for 'olo_base_ram_tdp.vhd'
+
+## File Comments
+- -------------------------------------------------------------------------------------------------
+- Copyright (c) 2019 by Paul Scherrer Institute, Switzerland
+- Copyright (c) 2024-2025 by Oliver Bründler
+- All rights reserved.
+- Authors: Oliver Bruendler
+- -------------------------------------------------------------------------------------------------
+- -------------------------------------------------------------------------------------------------
+- Description
+- -------------------------------------------------------------------------------------------------
+- This is a pure VHDL and vendor indpendent true dual port RAM with optional
+- Plus 55 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Library: work
+- Library: ieee
+- Library: work
+- Use: an older version, the documentation might not match the code.
+
+---------------------------------------------------------------------------------------------------
+-- Libraries
+---------------------------------------------------------------------------------------------------
+library ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+- Use: work.olo_base_pkg_math.all
+- Use: work.olo_base_pkg_attribute.all
+- Use: work.olo_base_pkg_string.all
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+- Use: work.olo_base_pkg_math.all
+- Use: work.olo_base_pkg_attribute.all
+- Use: work.olo_base_pkg_string.all
+- Use: VHDL93 (supported by all tools) does not allow
+    -- ... unconstrainted arrays as return types.
+    function getInitContent return Data_t is
+        variable Data_v         : Data_t(Depth_g - 1 downto 0)               := (others => (others => '0'))
+
+## Entity: olo_base_ram_tdp
+
+## Architecture: rtl of olo_base_ram_tdp
+
+### Signals
+- A_WrEna_Byte: std_logic
+- B_WrEna_Byte: std_logic
+
+### Component Declarations
+- olo_private_ram_tdp_nobe
+
+### Concurrent Statements
+- B_WrEna_Byte <= B_WrEna and B_Be(byte)
+- i_ram : component olo_private_ram_tdp_nobe
+                generic map (
+                    Depth_g         => Depth_g,
+                    Width_g         => 8,
+                    RdLatency_g     => RdLatency_g,
+                    RamStyle_g      => RamStyle_g,
+                    RamBehavior_g   => RamBehavior_g,
+                    InitString_g    => InitString_g,
+                    InitFormat_g    => InitFormat_g,
+                    InitWidth_g     => Width_g,
+                    InitShift_g     => 8*byte
+                )
+                port map (
+                    A_Clk     => A_Clk,
+                    A_Addr    => A_Addr,
+                    A_WrEna   => A_WrEna_Byte,
+                    A_WrData  => A_WrData(8*(byte+1)-1 downto 8*byte),
+                    A_RdData  => A_RdData(8*(byte+1)-1 downto 8*byte),
+                    B_Clk     => B_Clk,
+                    B_Addr    => B_Addr,
+                    B_WrEna   => B_WrEna_Byte,
+                    B_WrData  => B_WrData(8*(byte+1)-1 downto 8*byte),
+                    B_RdData  => B_RdData(8*(byte+1)-1 downto 8*byte)
+                )
+
+## Functional Analysis
+
+- Contains 2 clock domain(s): A_Clk, B_Clk
+- Implements memory functionality
+- May be part of a pipeline architecture
+- Defines custom functions: getInitContent
+
+## Code Metrics
+- Line count: 362
+- Process count: 0
+- Signal count: 2
+
+## Summary
+- This module implements memory functionality.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'olo_base_ram_tdp.vhd' plays a specific role in the overall CPU architecture.
+","
 
 library ieee;
     use ieee.std_logic_1164.all;
@@ -5074,7 +7448,96 @@ begin
     B_RdData <= RdPipeB(RdLatency_g);
 
 end architecture;"
-"This component generates reset pulses of a specified minimum duration after FPGA configuration and optionally upon request (reset input). The component does guarantee synchronous de-assertion of the reset. Assertion is asynchronous or synchronous, depending on the users choice. **Note:** Because the reset input is detected asynchronously, it is important that this input is glitch-free. The block comes with automatic constraints. For manual constraining, a  or a constraint is required for the _RstIn_ input (if it is used). **Note:** Automatic constraining currently only works for _AMD_ tools (_Vivado_) and the usage in VHDL. Manual constraints are required for Verilog or other tools. **WARNING:** Reset assertion upon FPGA configuration relies on the **target technology supporting specific FF initialization state**. For the most common target technologies (namely AMD and altera) this is given. However, for technologies which do not support specifying FF initialization state (e.g. Microchip devices) an external reset signal must be connected to _RstIn_ - _RstOut_ will not be asserted upon FPGA configuration. If in doubt, refer to the the documentation of your target technology or play it safe and connect _RstIn_.","
+"This component generates reset pulses of a specified minimum duration after FPGA configuration and optionally upon request (reset input). The component does guarantee synchronous de-assertion of the reset. Assertion is asynchronous or synchronous, depending on the users choice. **Note:** Because the reset input is detected asynchronously, it is important that this input is glitch-free. The block comes with automatic constraints. For manual constraining, a  or a constraint is required for the _RstIn_ input (if it is used). **Note:** Automatic constraining currently only works for _AMD_ tools (_Vivado_) and the usage in VHDL. Manual constraints are required for Verilog or other tools. **WARNING:** Reset assertion upon FPGA configuration relies on the **target technology supporting specific FF initialization state**. For the most common target technologies (namely AMD and altera) this is given. However, for technologies which do not support specifying FF initialization state (e.g. Microchip devices) an external reset signal must be connected to _RstIn_ - _RstOut_ will not be asserted upon FPGA configuration. If in doubt, refer to the the documentation of your target technology or play it safe and connect _RstIn_.
+
+# VHDL Analysis for 'olo_base_reset_gen.vhd'
+
+## File Comments
+- -------------------------------------------------------------------------------------------------
+- Copyright (c) 2024-2025 by Oliver Bründler
+- All rights reserved.
+- Authors: Oliver Bruendler
+- -------------------------------------------------------------------------------------------------
+- -------------------------------------------------------------------------------------------------
+- Description
+- -------------------------------------------------------------------------------------------------
+- This is a reset generator. It generates a pulse of the specified duration
+- after FPGA configuration. The reset output is High-Active according to the
+- Plus 30 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Library: work
+- Use: an older version, the documentation might not match the code.
+
+---------------------------------------------------------------------------------------------------
+-- Libraries
+---------------------------------------------------------------------------------------------------
+library ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+- Use: work.olo_base_pkg_math.all
+- Use: work.olo_base_pkg_attribute.all
+
+## Entity: olo_base_reset_gen
+
+## Architecture: struct of olo_base_reset_gen
+
+### Signals
+- RstSyncChain: std_logic_vector(2 downto 0)              := ""111""
+- RstSync: std_logic
+- DsSync: std_logic_vector(SyncStages_g-1 downto 0) := (others => '1')
+- PulseCnt: integer range 0 to PulseCntMax_c := 0
+- RstPulse: std_logic                        := '1'
+- is ShregExtract_SuppressExtraction_c;
+    attribute syn_srlstyle of DsSync: signal is SynSrlstyle_FlipFlops_c
+- is DontMerge_SuppressChanges_c;
+    attribute preserve of DsSync: signal is Preserve_SuppressChanges_c
+- is SynPreserve_SuppressChanges_c;
+    attribute syn_keep of DsSync: signal is SynKeep_SuppressChanges_c
+- is AsyncReg_TreatAsync_c;
+
+begin
+
+    -- Reset Synchronizer
+    p_rstsync: process (Clk, RstIn) is
+    begin
+        if RstIn = RstInPolarity_g then
+            RstSyncChain <= (others => '1')
+
+### Processes
+- Process 'p_rstsync :' (Clocked) (Has Reset) with sensitivity list: Clk, RstIn
+  - Implements synchronous logic
+- Process 'p_sync :' (Clocked) (Has Reset) with sensitivity list: Clk
+  - Implements synchronous logic
+- Process 'p_prolong :' (Clocked) (Has Reset) with sensitivity list: Clk
+  - Implements synchronous logic with reset
+- Process 'p_rstsync :' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+- Process 'p_sync :' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+- Process 'p_prolong :' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic with reset
+
+### Concurrent Statements
+- elsif rising_edge(Clk) then
+            RstSyncChain <= RstSyncChain(RstSyncChain'left - 1 downto 0) & '0'
+
+## Functional Analysis
+
+- Contains 2 clock domain(s): clock, Clk
+- Uses reset signal(s): RstPulseCycles_g, olo_base_reset_gen, RstSync, resets, reset, Reset, p_rstsync, RstOut, RstSyncChain, RstIn, RstPulse, RstInPolarity_g, AsyncResetOutput_g
+
+## Code Metrics
+- Line count: 150
+- Process count: 6
+- Signal count: 9
+
+## Summary
+- This module implements register or flip-flop functionality.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'olo_base_reset_gen.vhd' plays a specific role in the overall CPU architecture.
+","
 
 library ieee;
     use ieee.std_logic_1164.all;
@@ -5179,7 +7642,86 @@ begin
     end generate;
 
 end architecture;"
-"This component takes single-cycle pulses as inputs and divides the pulse frequency. The ratio can be configured at runtime or at compile-time. To use the compile-time variant, just leave the _In_Ratio_ port unconnected and assign the ratio to _MaxRatio_g_. The latency can be selected to be 0 (combinatorial output) or 1 (registered output) clock cycle through the generic _Latency_g_. Registered output (_Latency_g_=1) is preferred for timing optimization reasons. Below figure shows an example for a ratio of 3. The entity can also be used to convert single cycle pulses into pulses that stay active until acknowledged by _Out_Ready_='1'. For this usage, simply use _MaxRatio_g=1_ and leave _In_Ratio_ unconnected. Note that for runtime configurable ratio, _In_Ratio_ must be set to the **desired ratio minus one**. E.g. to forward every third pulse to the output, _In_Ratio_ must be set to 2.","
+"This component takes single-cycle pulses as inputs and divides the pulse frequency. The ratio can be configured at runtime or at compile-time. To use the compile-time variant, just leave the _In_Ratio_ port unconnected and assign the ratio to _MaxRatio_g_. The latency can be selected to be 0 (combinatorial output) or 1 (registered output) clock cycle through the generic _Latency_g_. Registered output (_Latency_g_=1) is preferred for timing optimization reasons. Below figure shows an example for a ratio of 3. The entity can also be used to convert single cycle pulses into pulses that stay active until acknowledged by _Out_Ready_='1'. For this usage, simply use _MaxRatio_g=1_ and leave _In_Ratio_ unconnected. Note that for runtime configurable ratio, _In_Ratio_ must be set to the **desired ratio minus one**. E.g. to forward every third pulse to the output, _In_Ratio_ must be set to 2.
+
+# VHDL Analysis for 'olo_base_strobe_div.vhd'
+
+## File Comments
+- -------------------------------------------------------------------------------------------------
+- Copyright (c) 2024 by Oliver Bründler
+- All rights reserved.
+- Authors: Benoit Stef, Oliver Bründler
+- -------------------------------------------------------------------------------------------------
+- -------------------------------------------------------------------------------------------------
+- Description
+- -------------------------------------------------------------------------------------------------
+- This is a very basic strobe divider. It forwards only every Nth single
+- cycle pulse to the output.
+- Plus 20 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Library: work
+- Use: an older version, the documentation might not match the code.
+
+---------------------------------------------------------------------------------------------------
+-- Libraries
+---------------------------------------------------------------------------------------------------
+library ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+- Use: work.olo_base_pkg_math.all
+
+## Entity: olo_base_strobe_div
+
+## Architecture: rtl of olo_base_strobe_div
+
+### Signals
+- r: TwoProcess_r
+- r_next: TwoProcess_r
+- ***
+        r_next <= v;
+    end process;
+
+    p_seq: process (Clk) is
+    begin
+        if rising_edge(Clk) then
+            r <= r_next
+
+### Processes
+- Process 'p_comb :' with sensitivity list: r, In_Valid, In_Ratio, Out_Ready
+  - Implements conditional logic
+- Process 'p_seq :' (Clocked) (Has Reset) with sensitivity list: Clk
+  - Implements synchronous logic
+- Process 'Unnamed process' with sensitivity list: None (uses wait statements)
+  - Implements conditional logic
+- Process 'p_seq :' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+
+### Concurrent Statements
+- -- Ratio Counter
+        if In_Valid = '1' then
+            if r.Count >= unsigned(In_Ratio) or MaxRatio_g = 1 then
+                v.Count    := 0
+- v.OutValid := '1'
+- else
+                v.Count := r.Count + 1
+
+## Functional Analysis
+
+- Contains 1 clock domain(s): Clk
+- Uses reset signal(s): Rst
+
+## Code Metrics
+- Line count: 110
+- Process count: 4
+- Signal count: 3
+
+## Summary
+- This module appears to be a general-purpose digital logic implementation.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'olo_base_strobe_div.vhd' plays a specific role in the overall CPU architecture.
+","
 
 library ieee;
     use ieee.std_logic_1164.all;
@@ -5256,7 +7798,77 @@ begin
     end process;
 
 end architecture;"
-"This component generates pulse at a fixed frequency. It optionally allows synchronization of those events to an input. In the most simple use-case, single cycle pulses are generated free-running at a fixed frequency. To achieve this, _Out_Ready_ and _In_Sync_ can be left unconnected. Bellow figure depicts this situation for _FreqClkHz_g=5e6_ and _FreqStrobeHz_g=1e6_. Additionally the strobe phase can be synchronized to _In_Sync_. In this case, the event is synchronized to the rising edge of the _In_Sync_ input. If the _Out_Ready_ signal is connected, _Out_Valid_ stays asserted until _Out_Ready_ and _Out_Valid_ are asserted at the same time (AXI4-Stream hanshaking). Note that in this case, the rising edges of _Out_Valid_ occur at _FreqStrobeHz_g_ independently of how long the signal stays asserted. However, _Out_Ready_ and _In_Sync_ are optional signals and can be left unconnected in the standard-case where just a pulse with a known frequency is required. The strobe generator by default works in _aequidistant mode_: It produces _Out_Valid_ pulses that are always the same number of clock-cycles apart from each other. This has the down-side of the output strobe period being off by up to half a clock period - which finally leads to a slightly shifted frequency. Alternatively the strobe generator can be used in _fractional mode_ (by setting _FractionalMode_g=true_). In this mode, the strobe generator does vary the time between _Out_Valid_ pulses by one clock cycle to meet the _FreqStrobeHz_g_ with less than 1% of error _on average_ (over a long time). Use _fractional mode_ if _FreqStrobeHz_g_ is relatively close to _FreqClkHz_g_ and the exact strobe frequency is important. Use _aequidistant mode_ if a constant number of clock cycles between _Out_Valid_ pulses is required.","
+"This component generates pulse at a fixed frequency. It optionally allows synchronization of those events to an input. In the most simple use-case, single cycle pulses are generated free-running at a fixed frequency. To achieve this, _Out_Ready_ and _In_Sync_ can be left unconnected. Bellow figure depicts this situation for _FreqClkHz_g=5e6_ and _FreqStrobeHz_g=1e6_. Additionally the strobe phase can be synchronized to _In_Sync_. In this case, the event is synchronized to the rising edge of the _In_Sync_ input. If the _Out_Ready_ signal is connected, _Out_Valid_ stays asserted until _Out_Ready_ and _Out_Valid_ are asserted at the same time (AXI4-Stream hanshaking). Note that in this case, the rising edges of _Out_Valid_ occur at _FreqStrobeHz_g_ independently of how long the signal stays asserted. However, _Out_Ready_ and _In_Sync_ are optional signals and can be left unconnected in the standard-case where just a pulse with a known frequency is required. The strobe generator by default works in _aequidistant mode_: It produces _Out_Valid_ pulses that are always the same number of clock-cycles apart from each other. This has the down-side of the output strobe period being off by up to half a clock period - which finally leads to a slightly shifted frequency. Alternatively the strobe generator can be used in _fractional mode_ (by setting _FractionalMode_g=true_). In this mode, the strobe generator does vary the time between _Out_Valid_ pulses by one clock cycle to meet the _FreqStrobeHz_g_ with less than 1% of error _on average_ (over a long time). Use _fractional mode_ if _FreqStrobeHz_g_ is relatively close to _FreqClkHz_g_ and the exact strobe frequency is important. Use _aequidistant mode_ if a constant number of clock cycles between _Out_Valid_ pulses is required.
+
+# VHDL Analysis for 'olo_base_strobe_gen.vhd'
+
+## File Comments
+- -------------------------------------------------------------------------------------------------
+- Copyright (c) 2018 by Paul Scherrer Institute, Switzerland
+- Copyright (c) 2024 by Oliver Bründler
+- All rights reserved.
+- Authors: Benoit Stef, Oliver Bründler
+- -------------------------------------------------------------------------------------------------
+- -------------------------------------------------------------------------------------------------
+- Description
+- -------------------------------------------------------------------------------------------------
+- This is a very basic strobe generator. It produces pulses with a duration
+- Plus 22 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Library: work
+- Use: an older version, the documentation might not match the code.
+
+---------------------------------------------------------------------------------------------------
+-- Libraries
+---------------------------------------------------------------------------------------------------
+library ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+- Use: ieee.math_real.all
+- Use: work.olo_base_pkg_math.all
+
+## Entity: olo_base_strobe_gen
+
+## Architecture: rtl of olo_base_strobe_gen
+
+### Signals
+- Declarations
+    signal Count: integer range 0 to PeriodCounts_c-1
+- SyncLast: std_logic
+
+### Processes
+- Process 'p_strobe :' (Clocked) (Has Reset) with sensitivity list: Clk
+  - Implements synchronous logic with reset
+- Process 'p_strobe :' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic with reset
+
+### Concurrent Statements
+- Out_Valid <= '1'
+- -- Wraparound
+            elsif Count >= WrapBorder_c then
+                Out_Valid <= '1'
+- if FractionalMode_g then
+                    Count <= Count - WrapBorder_c
+- else
+                    Count <= 0
+
+## Functional Analysis
+
+- Contains 2 clock domain(s): clock, Clk
+- Uses reset signal(s): Reset, Rst
+
+## Code Metrics
+- Line count: 104
+- Process count: 2
+- Signal count: 2
+
+## Summary
+- This module appears to be a general-purpose digital logic implementation.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'olo_base_strobe_gen.vhd' plays a specific role in the overall CPU architecture.
+","
 
 library ieee;
     use ieee.std_logic_1164.all;
@@ -5325,7 +7937,73 @@ begin
     end process;
 
 end architecture;"
-"This component allows selecting one unique channel over a bunch of ""N"" time division multiplexed (tdm, see [Conventions](../Conventions.md)) data. Note that the number of channels must be compile-time defined (i.e. the entity does not support variable number of channels at run-time). The select signal _In_ChSel_ is sampled when the data of the first channel of a TDM burst arrives. The output _Out_Data_/_Out_Valid_ is asserted after the last channel of a TDM burst was received. The state of the _In_ChSel_ signal in between the _CH0_ inputs (where it is sampled) does not have any effect as depicted by the figure below. The entity does automatically synchronize the channel counter to _In_Last_. However, it can also be used in absence of _In_Last_. In this case the first sample after reset is interpreted as channel 0 and the channel-counter is freerunning. If _In_Last_ is asserted on the last channel in a TDM burst, the corresponding output hast _Out_Last_ asserted (independently of which channel was selected). This behavior allows to signal packet-boundaries throughout the _olo_base_tdm_mux_.","
+"This component allows selecting one unique channel over a bunch of ""N"" time division multiplexed (tdm, see [Conventions](../Conventions.md)) data. Note that the number of channels must be compile-time defined (i.e. the entity does not support variable number of channels at run-time). The select signal _In_ChSel_ is sampled when the data of the first channel of a TDM burst arrives. The output _Out_Data_/_Out_Valid_ is asserted after the last channel of a TDM burst was received. The state of the _In_ChSel_ signal in between the _CH0_ inputs (where it is sampled) does not have any effect as depicted by the figure below. The entity does automatically synchronize the channel counter to _In_Last_. However, it can also be used in absence of _In_Last_. In this case the first sample after reset is interpreted as channel 0 and the channel-counter is freerunning. If _In_Last_ is asserted on the last channel in a TDM burst, the corresponding output hast _Out_Last_ asserted (independently of which channel was selected). This behavior allows to signal packet-boundaries throughout the _olo_base_tdm_mux_.
+
+# VHDL Analysis for 'olo_base_tdm_mux.vhd'
+
+## File Comments
+- -------------------------------------------------------------------------------------------------
+- Copyright (c) 2018 by Paul Scherrer Institute, Switzerland
+- Copyright (c) 2024 by Oliver Bründler
+- All rights reserved.
+- Authors: Benoit Stef
+- -------------------------------------------------------------------------------------------------
+- -------------------------------------------------------------------------------------------------
+- Description
+- -------------------------------------------------------------------------------------------------
+- This is a very basic mux for Time Division Multiplxed data input
+- Plus 23 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Library: work
+- Use: an older version, the documentation might not match the code.
+
+---------------------------------------------------------------------------------------------------
+-- Libraries
+---------------------------------------------------------------------------------------------------
+library ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+- Use: work.olo_base_pkg_math.all
+
+## Entity: olo_base_tdm_mux
+
+## Architecture: rtl of olo_base_tdm_mux
+
+### Signals
+- Count_0: integer range 0 to Channels_g-1 := 0
+- SelLatched_1: std_logic_vector(In_ChSel'range)
+- Data_1: std_logic_vector(In_Data'range)
+- Count_1: integer range 0 to Channels_g-1
+- Vld_1: std_logic
+- Last_1: std_logic
+- Data_2: std_logic_vector(In_Data'range)
+- Vld_2: std_logic
+- Last_2: std_logic
+
+### Processes
+- Process 'p_decode :' (Clocked) (Has Reset) with sensitivity list: Clk
+  - Implements synchronous logic with reset
+- Process 'p_decode :' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic with reset
+
+## Functional Analysis
+
+- Contains 1 clock domain(s): Clk
+- Uses reset signal(s): Reset, Rst
+- May be part of a pipeline architecture
+
+## Code Metrics
+- Line count: 118
+- Process count: 2
+- Signal count: 9
+
+## Summary
+- This module appears to be a general-purpose digital logic implementation.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'olo_base_tdm_mux.vhd' plays a specific role in the overall CPU architecture.
+","
 
 library ieee;
     use ieee.std_logic_1164.all;
@@ -5407,7 +8085,87 @@ begin
     Out_Last  <= Last_2;
 
 end architecture;"
-"This component implements a width conversion between arbitrary word widths. It can handle continuous or packetized data-streams and optionally supports the usage of byte-enable signals (for input and output widths being a multiple of 8-bits only). The width conversion implements AXI-S handshaking signals to handle back-pressure. The with conversion supports back-to-back conversions (_In_Valid_ can stay high all the time). It also handles the last-flag correctly according to AXI-S specification. If _In_Last_ is asserted, all data is flushed out and _Out_Last_ is asserted accordingly. Usage examples: - Conversion from 8-bit (byte oriented) data to 7-bit for the usage with 7-bit LVDS serializers - Conversion from 24-bit to 32-bit in order to write 24-bit video pixel-data efficiently to a 32-bit wide memory Note that for integer ratio width conversions, [olo_base_wconv_n2xn](./olo_base_wconv_n2xn.md) and [olo_base_wconv_xn2n](./olo_base_wconv_xn2n.md) shall be used because they are more resource efficient and timing optimal. The entity does little-endian data alignment as shown in the figures below (the first word received on the input is packet into the output bits with the lowest index). Below example shows a conversion from 16 to 24 bit. Backpressure (_Out_Ready_ going low) is not depicted for simplicity reasons (but fully supported by the implementation). Interesting is the last packet (blue) which contains an all zero word at the end, because without byte enable from the input data 0x**00**66 it cannot be known if the zeros represent a data byte being zero or if it is a padding byte. Similarly in the last output word of the orange packet, two padding bytes are inserted (0x**0000**DD) but to a receiver this might not be clear due to the missing byte enables. Below example is similar but uses byte enables to indicate padding bytes on the input as well as on the output. The blue packet is now also shorter by one cycle because padding bytes at the end of the packet are removed. Byte enables (_UseBe_g=true_) are only supported when both, _InWidth_g_ and _OutWidth_g_, are multiples of 8. For inputs or outputs not being mutiples of bytes, the behavior of _In_Be_ and _Out_Be_ byte-enable signals is undefined. **The usage of byte-enables is limited to indicating that not all bytes are used in the last beat of a packet**. Any _In_Be_ being low in any other word of a packet than the last one (_In_Last='1'_) are not allowed and will lead to error messages in simulations as well as undefined behavior in synthesis. _olo_Base_wconv_n2m_ can be used for non-byte-aligned data as well. In this case byte enables are not supported, otherwise the block behaves the same as for byte-oriented data. Backpressure (_Out_Ready_ going low) is not depicted for simplicity reasons (but fully supported by the implementation). Below example shows a 8-bit to 7-bit conversion, as required for 7-bit LVDS serializers. And of course the conversion into the other direction (7-bit to 8-bit) is possible as well:$","
+"This component implements a width conversion between arbitrary word widths. It can handle continuous or packetized data-streams and optionally supports the usage of byte-enable signals (for input and output widths being a multiple of 8-bits only). The width conversion implements AXI-S handshaking signals to handle back-pressure. The with conversion supports back-to-back conversions (_In_Valid_ can stay high all the time). It also handles the last-flag correctly according to AXI-S specification. If _In_Last_ is asserted, all data is flushed out and _Out_Last_ is asserted accordingly. Usage examples: - Conversion from 8-bit (byte oriented) data to 7-bit for the usage with 7-bit LVDS serializers - Conversion from 24-bit to 32-bit in order to write 24-bit video pixel-data efficiently to a 32-bit wide memory Note that for integer ratio width conversions, [olo_base_wconv_n2xn](./olo_base_wconv_n2xn.md) and [olo_base_wconv_xn2n](./olo_base_wconv_xn2n.md) shall be used because they are more resource efficient and timing optimal. The entity does little-endian data alignment as shown in the figures below (the first word received on the input is packet into the output bits with the lowest index). Below example shows a conversion from 16 to 24 bit. Backpressure (_Out_Ready_ going low) is not depicted for simplicity reasons (but fully supported by the implementation). Interesting is the last packet (blue) which contains an all zero word at the end, because without byte enable from the input data 0x**00**66 it cannot be known if the zeros represent a data byte being zero or if it is a padding byte. Similarly in the last output word of the orange packet, two padding bytes are inserted (0x**0000**DD) but to a receiver this might not be clear due to the missing byte enables. Below example is similar but uses byte enables to indicate padding bytes on the input as well as on the output. The blue packet is now also shorter by one cycle because padding bytes at the end of the packet are removed. Byte enables (_UseBe_g=true_) are only supported when both, _InWidth_g_ and _OutWidth_g_, are multiples of 8. For inputs or outputs not being mutiples of bytes, the behavior of _In_Be_ and _Out_Be_ byte-enable signals is undefined. **The usage of byte-enables is limited to indicating that not all bytes are used in the last beat of a packet**. Any _In_Be_ being low in any other word of a packet than the last one (_In_Last='1'_) are not allowed and will lead to error messages in simulations as well as undefined behavior in synthesis. _olo_Base_wconv_n2m_ can be used for non-byte-aligned data as well. In this case byte enables are not supported, otherwise the block behaves the same as for byte-oriented data. Backpressure (_Out_Ready_ going low) is not depicted for simplicity reasons (but fully supported by the implementation). Below example shows a 8-bit to 7-bit conversion, as required for 7-bit LVDS serializers. And of course the conversion into the other direction (7-bit to 8-bit) is possible as well:$
+
+# VHDL Analysis for 'olo_base_wconv_n2m.vhd'
+
+## File Comments
+- -------------------------------------------------------------------------------------------------
+- Copyright (c) 2025 by Oliver Bründler
+- All rights reserved.
+- Authors: Oliver Bruendler
+- -------------------------------------------------------------------------------------------------
+- -------------------------------------------------------------------------------------------------
+- Description
+- -------------------------------------------------------------------------------------------------
+- This entity implements a simple data-width conversion between arbitrary input and output
+- widths.
+- Plus 35 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Library: work
+- Use: an older version, the documentation might not match the code.
+
+---------------------------------------------------------------------------------------------------
+-- Libraries
+---------------------------------------------------------------------------------------------------
+library ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+- Use: ieee.math_real.all
+- Use: ieee.std_logic_misc.all
+- Use: work.olo_base_pkg_math.all
+- Use: work.olo_base_pkg_logic.all
+
+## Entity: olo_base_wconv_n2m
+
+## Architecture: rtl of olo_base_wconv_n2m
+
+### Signals
+- r: TwoProcess_r
+- r_next: TwoProcess_r
+- ***
+            r_next <= v;
+        end process;
+
+        p_seq: process (Clk) is
+        begin
+            if rising_edge(Clk) then
+                r <= r_next
+
+### Processes
+- Process 'p_comb :' (Has Reset) with sensitivity list: r, In_Valid, In_Data, Out_Ready, In_Last, In_Be, Rst
+  - Implements conditional logic
+- Process 'p_seq :' (Clocked) (Has Reset) with sensitivity list: Clk
+  - Implements synchronous logic
+- Process 'Unnamed process' (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements conditional logic
+- Process 'p_seq :' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+
+### Concurrent Statements
+- -- Output transaction
+            Out_Valid_v  := '0'
+- IsLastBeat_v := or_reduce(r.LastChunk(OutChunks_c - 1 downto 0))
+- if (r.ChunkCnt >= OutChunks_c) or (IsLastBeat_v = '1') then
+                Out_Valid_v := '1'
+
+## Functional Analysis
+
+- Contains 1 clock domain(s): Clk
+- Uses reset signal(s): Rst
+
+## Code Metrics
+- Line count: 204
+- Process count: 4
+- Signal count: 3
+
+## Summary
+- This module implements register or flip-flop functionality.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'olo_base_wconv_n2m.vhd' plays a specific role in the overall CPU architecture.
+","
 
 library ieee;
     use ieee.std_logic_1164.all;
@@ -5565,7 +8323,87 @@ begin
     end generate;
 
 end architecture;"
-"This component implements a data width conversion from N-bits to a multiple of N-bits. The sample rate (_Valid_ pulse rate) is reduced accordingly. The width conversion implements AXI-S handshaking signals to handle back-pressure. This block can also be used for _TDM to Parallel_ conversion (see [Conventions](../Conventions.md)) The with conversion supports back-to-back conversions (_In_Valid_ can stay high all the time). It also handles the last-flag correctly according to AXI specification. If _In_Last_ is asserted, all data is flushed out and the word enabled (_Out_WordEna_) at the output are set only for words that contain data. _Out_Last_ is asserted accordingly. Note that insteady of byte-enables, a word enable (_Out_WordEna_)  is implemented. It signals the validity of data on the granularity of _In_Data_ words. This concept allows to correctly handle any data-widths, not only multiple of bytes. The entity does little-endian data alignment as shown in the figure below. The figure depicts operation of the block without backpressure (_Out_Ready_ continuously high) and for a width-conversion from 4 to 8 bits. This entity does only do a width conversion but not clock crossing. If a half-clock-double-width conversion is used, [olo_base_cc_xn2n](./olo_base_cc_xn2n.md) component can be used after the width conversion.","
+"This component implements a data width conversion from N-bits to a multiple of N-bits. The sample rate (_Valid_ pulse rate) is reduced accordingly. The width conversion implements AXI-S handshaking signals to handle back-pressure. This block can also be used for _TDM to Parallel_ conversion (see [Conventions](../Conventions.md)) The with conversion supports back-to-back conversions (_In_Valid_ can stay high all the time). It also handles the last-flag correctly according to AXI specification. If _In_Last_ is asserted, all data is flushed out and the word enabled (_Out_WordEna_) at the output are set only for words that contain data. _Out_Last_ is asserted accordingly. Note that insteady of byte-enables, a word enable (_Out_WordEna_)  is implemented. It signals the validity of data on the granularity of _In_Data_ words. This concept allows to correctly handle any data-widths, not only multiple of bytes. The entity does little-endian data alignment as shown in the figure below. The figure depicts operation of the block without backpressure (_Out_Ready_ continuously high) and for a width-conversion from 4 to 8 bits. This entity does only do a width conversion but not clock crossing. If a half-clock-double-width conversion is used, [olo_base_cc_xn2n](./olo_base_cc_xn2n.md) component can be used after the width conversion.
+
+# VHDL Analysis for 'olo_base_wconv_n2xn.vhd'
+
+## File Comments
+- -------------------------------------------------------------------------------------------------
+- Copyright (c) 2018 by Paul Scherrer Institute, Switzerland
+- Copyright (c) 2024 by Oliver Bründler
+- All rights reserved.
+- Authors: Oliver Bruendler
+- -------------------------------------------------------------------------------------------------
+- -------------------------------------------------------------------------------------------------
+- Description
+- -------------------------------------------------------------------------------------------------
+- This entity implements a simple data-width conversion. The output width
+- Plus 24 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Library: work
+- Use: an older version, the documentation might not match the code.
+
+---------------------------------------------------------------------------------------------------
+-- Libraries
+---------------------------------------------------------------------------------------------------
+library ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+- Use: ieee.math_real.all
+- Use: work.olo_base_pkg_math.all
+- Use: work.olo_base_pkg_logic.all
+
+## Entity: olo_base_wconv_n2xn
+
+## Architecture: rtl of olo_base_wconv_n2xn
+
+### Signals
+- r: TwoProcess_r
+- r_next: TwoProcess_r
+- ***
+            r_next <= v;
+        end process;
+
+        p_seq: process (Clk) is
+        begin
+            if rising_edge(Clk) then
+                r <= r_next
+
+### Processes
+- Process 'p_comb :' (Has Reset) with sensitivity list: r, In_Valid, In_Data, Out_Ready, In_Last
+  - Implements conditional logic
+- Process 'p_seq :' (Clocked) (Has Reset) with sensitivity list: Clk
+  - Implements synchronous logic
+- Process 'Unnamed process' (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements conditional logic
+- Process 'p_seq :' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+
+### Concurrent Statements
+- -- Halt detection
+            ShiftDone_v := (r.DataVld(r.DataVld'high) = '1') or (r.DataLast = '1')
+- if ShiftDone_v and (r.Out_Valid = '1') and (Out_Ready = '0') then
+                IsStuck_v := '1'
+- else
+                IsStuck_v := '0'
+
+## Functional Analysis
+
+- Contains 1 clock domain(s): Clk
+- Uses reset signal(s): Reset, Rst
+
+## Code Metrics
+- Line count: 170
+- Process count: 4
+- Signal count: 3
+
+## Summary
+- This module appears to be a general-purpose digital logic implementation.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'olo_base_wconv_n2xn.vhd' plays a specific role in the overall CPU architecture.
+","
 
 library ieee;
     use ieee.std_logic_1164.all;
@@ -5698,7 +8536,87 @@ begin
     end generate;
 
 end architecture;"
-"This component implements a data width conversion from a multiple N-bits to a N-bits. The sample rate (_Valid_ pulse rate) is increased accordingly. The width conversion implements AXI-S handshaking signals to handle back-pressure. The width conversion does support back-to-back conversions (_Out_Valid/In_ready_ can stay high all the time). This block can also be used for _Parallel to TDM_ conversion (see [Conventions](../Conventions.md)) The entity does little-endian data alignment as shown in the figure below. The with conversion does also handle the last-flag according to AXI specification and it can do alignment. To do so, an input word-enable signal _In_WordEna_ exists (one bit per _OutWidth_g_ bits). Words that are not enabled are not sent to the output. If the input is marked with the _In_Last_ flag, the last enabled word is marked with _Out_Last_ at the output. Note that with the assertion of _In_Last_ at least one byte of the data must be valid (_In_WordEna_ high). Otherwise it would be unclear when _Out_Last_ shall be assigned. This entity does only do a width conversion but not clock crossing. If a double-clock-half-width conversion is required, [olo_base_cc_n2xn](./olo_base_cc_n2xn)  component can be used in front of the width conversion.","
+"This component implements a data width conversion from a multiple N-bits to a N-bits. The sample rate (_Valid_ pulse rate) is increased accordingly. The width conversion implements AXI-S handshaking signals to handle back-pressure. The width conversion does support back-to-back conversions (_Out_Valid/In_ready_ can stay high all the time). This block can also be used for _Parallel to TDM_ conversion (see [Conventions](../Conventions.md)) The entity does little-endian data alignment as shown in the figure below. The with conversion does also handle the last-flag according to AXI specification and it can do alignment. To do so, an input word-enable signal _In_WordEna_ exists (one bit per _OutWidth_g_ bits). Words that are not enabled are not sent to the output. If the input is marked with the _In_Last_ flag, the last enabled word is marked with _Out_Last_ at the output. Note that with the assertion of _In_Last_ at least one byte of the data must be valid (_In_WordEna_ high). Otherwise it would be unclear when _Out_Last_ shall be assigned. This entity does only do a width conversion but not clock crossing. If a double-clock-half-width conversion is required, [olo_base_cc_n2xn](./olo_base_cc_n2xn)  component can be used in front of the width conversion.
+
+# VHDL Analysis for 'olo_base_wconv_xn2n.vhd'
+
+## File Comments
+- -------------------------------------------------------------------------------------------------
+- Copyright (c) 2018 by Paul Scherrer Institute, Switzerland
+- Copyright (c) 2024 by Oliver Bründler
+- All rights reserved.
+- Authors: Oliver Bruendler
+- -------------------------------------------------------------------------------------------------
+- -------------------------------------------------------------------------------------------------
+- Description
+- -------------------------------------------------------------------------------------------------
+- This entity implements a simple data-width conversion. The input width
+- Plus 20 more comments
+
+## Libraries and Packages
+- Library: ieee
+- Library: work
+- Use: an older version, the documentation might not match the code.
+
+---------------------------------------------------------------------------------------------------
+-- Libraries
+---------------------------------------------------------------------------------------------------
+library ieee
+- Use: ieee.std_logic_1164.all
+- Use: ieee.numeric_std.all
+- Use: ieee.math_real.all
+- Use: work.olo_base_pkg_math.all
+- Use: work.olo_base_pkg_logic.all
+
+## Entity: olo_base_wconv_xn2n
+
+## Architecture: rtl of olo_base_wconv_xn2n
+
+### Signals
+- r: TwoProcess_r
+- r_next: TwoProcess_r
+- ***
+        r_next <= v;
+    end process;
+
+    p_seq: process (Clk) is
+    begin
+        if rising_edge(Clk) then
+            r <= r_next
+
+### Processes
+- Process 'p_comb :' with sensitivity list: r, In_Valid, In_Data, Out_Ready, In_WordEna, In_Last
+  - Implements conditional logic
+- Process 'p_seq :' (Clocked) (Has Reset) with sensitivity list: Clk
+  - Implements synchronous logic
+- Process 'Unnamed process' with sensitivity list: None (uses wait statements)
+  - Implements conditional logic
+- Process 'p_seq :' (Clocked) (Has Reset) with sensitivity list: None (uses wait statements)
+  - Implements synchronous logic
+
+### Concurrent Statements
+- -- Halt detection
+        IsReady_v := '1'
+- if unsigned(r.DataVld(r.DataVld'high downto 1)) /= 0 then
+            IsReady_v := '0'
+- elsif r.DataVld(0) = '1' and Out_Ready = '0' then
+            IsReady_v := '0'
+
+## Functional Analysis
+
+- Contains 1 clock domain(s): Clk
+- Uses reset signal(s): Rst
+
+## Code Metrics
+- Line count: 136
+- Process count: 4
+- Signal count: 3
+
+## Summary
+- This module appears to be a general-purpose digital logic implementation.
+
+This file is part of the LXP32 CPU design, which is likely a 32-bit processor implementation. The file 'olo_base_wconv_xn2n.vhd' plays a specific role in the overall CPU architecture.
+","
 
 library ieee;
     use ieee.std_logic_1164.all;
